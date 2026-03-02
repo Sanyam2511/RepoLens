@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+dist/
+build/
+
+# IDEs and Tools
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.log
+vnum/
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Project Specific (Temporary analysis clones)
+apps/worker/temp-repo/
