@@ -1,37 +1,40 @@
 import express from 'express';
-import { analyzeRepo } from './analyzer.js';
-import { downloadRepo } from './downloader.js';
-import fs from 'node:fs';
+import { analysisQueue } from './queue.js';
 
 const app = express();
 app.use(express.json());
 
 app.post('/analyze', async (req, res) => {
-    const { repoUrl } = req.body; 
-
+    const { repoUrl } = req.body;
+    
     if (!repoUrl) {
-        return res.status(400).json({ error: "Please provide a repoUrl" });
+        res.status(400).json({ error: "repoUrl is required" });
+        return;
     }
 
-    try {
-        const localPath = downloadRepo(repoUrl);
-        const data = analyzeRepo(localPath);
-
-        res.json({ 
-            success: true, 
-            repository: repoUrl,
-            stats: {
-                nodes: data.nodes.length,
-                edges: data.edges.length
-            },
-            data 
-        });
-    } catch (error) {
-        res.status(500).json({ error: "Analysis failed", details: String(error) });
-    }
+    const job = await analysisQueue.add('analyze-repo', { repoUrl });
+    
+    res.json({ 
+        message: "Analysis queued successfully", 
+        jobId: job.id 
+    });
 });
 
-const PORT = 4000;
-app.listen(PORT, () => {
-    console.log(`🚀 RepoLens Worker ready at http://localhost:${PORT}`);
+app.get('/status/:jobId', async (req, res) => {
+    const job = await analysisQueue.getJob(req.params.jobId);
+    
+    if (!job) {
+        res.status(404).json({ error: "Job not found" });
+        return;
+    }
+
+    const state = await job.getState();
+    const result = job.returnvalue;
+    const failedReason = job.failedReason;
+
+    res.json({ state, result, failedReason });
+});
+
+app.listen(4000, () => {
+    console.log("🚀 RepoLens Highway active on http://localhost:4000");
 });
