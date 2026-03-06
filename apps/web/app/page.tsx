@@ -1,65 +1,175 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useState, useCallback } from "react";
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
+  BackgroundVariant,
+} from "@xyflow/react";
+import { Search, Loader2 } from "lucide-react";
+
+// We import the shared types so the frontend knows exactly what to expect
+import { RepoNode, RepoEdge } from "shared";
+
+export default function RepoLensDashboard() {
+  const [repoUrl, setRepoUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [statusText, setStatusText] = useState("");
+
+  // React Flow state hooks
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  // 1. Submit the Job to the Worker
+  const handleAnalyze = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repoUrl) return;
+
+    setLoading(true);
+    setStatusText("Initializing analysis...");
+    setNodes([]);
+    setEdges([]);
+
+    try {
+      const res = await fetch("http://localhost:4000/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl }),
+      });
+      const data = await res.json();
+
+      if (data.jobId) {
+        setStatusText("Repository queued. Analyzing AST...");
+        pollJobStatus(data.jobId);
+      } else {
+        setStatusText("Failed to queue job.");
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error(error);
+      setStatusText("Error connecting to the worker engine.");
+      setLoading(false);
+    }
+  };
+
+  // 2. Poll the Worker until the job is done
+  const pollJobStatus = async (jobId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`http://localhost:4000/status/${jobId}`);
+        const data = await res.json();
+
+        if (data.state === "completed") {
+          clearInterval(interval);
+          setStatusText("Analysis complete! Rendering map...");
+          mapDataToCanvas(data.result.nodes, data.result.edges);
+          setLoading(false);
+        } else if (data.state === "failed") {
+          clearInterval(interval);
+          setStatusText(`Analysis failed: ${data.failedReason}`);
+          setLoading(false);
+        } else {
+          setStatusText(`Processing: ${data.state}...`);
+        }
+      } catch (error) {
+        clearInterval(interval);
+        setStatusText("Lost connection to worker.");
+        setLoading(false);
+      }
+    }, 2000); // Check every 2 seconds
+  };
+
+  // 3. Transform our Shared Types into React Flow Types
+  const mapDataToCanvas = (repoNodes: RepoNode[], repoEdges: RepoEdge[]) => {
+    // For now, we use a simple grid layout to prevent them from stacking on top of each other
+    const canvasNodes = repoNodes.map((node, index) => {
+      const isApi = node.type === "api-endpoint";
+      const isStorage = node.type === "storage";
+
+      return {
+        id: node.id,
+        // Quick math for a basic grid layout
+        position: { x: (index % 4) * 250 + 100, y: Math.floor(index / 4) * 150 + 100 },
+        data: { 
+          label: `${isApi ? "🌐 " : isStorage ? "🗄️ " : "📄 "}${node.label}` 
+        },
+        type: "default",
+        style: {
+          background: isApi ? "#059669" : isStorage ? "#ca8a04" : "#1e293b",
+          color: "#f8fafc",
+          border: "1px solid #334155",
+          borderRadius: "8px",
+          padding: "12px",
+          boxShadow: isApi || isStorage ? "0 0 15px rgba(255,255,255,0.1)" : "none",
+        },
+      };
+    });
+
+    const canvasEdges = repoEdges.map((edge, index) => ({
+      id: `e-${index}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+      animated: true, // This gives us the "glowing data flow" effect
+      style: { stroke: "#38bdf8", strokeWidth: 2 },
+    }));
+
+    setNodes(canvasNodes);
+    setEdges(canvasEdges);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="w-screen h-screen relative bg-slate-900 text-white overflow-hidden">
+      {/* The Search Bar (Glassmorphic) */}
+      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 w-full max-w-2xl px-4">
+        <form onSubmit={handleAnalyze} className="glass-panel rounded-2xl p-2 flex items-center shadow-2xl">
+          <Search className="text-slate-400 ml-3 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Paste a public GitHub URL (e.g., https://github.com/expressjs/cors)"
+            className="flex-1 bg-transparent border-none outline-none px-4 py-3 text-slate-100 placeholder-slate-400"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-500 transition-colors px-6 py-3 rounded-xl font-medium flex items-center"
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analyze"}
+          </button>
+        </form>
+        
+        {/* Status Indicator */}
+        {statusText && (
+          <div className="text-center mt-4 text-sm text-slate-300 font-mono tracking-wide">
+            {statusText}
+          </div>
+        )}
+      </div>
+
+      {/* The React Flow Canvas */}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        fitView
+        className="w-full h-full"
+      >
+        <Background color="#334155" variant={BackgroundVariant.Dots} gap={24} size={2} />
+        <Controls className="bg-slate-800 border-slate-700 fill-white" />
+        <MiniMap 
+          nodeColor={(n) => n.style?.background as string} 
+          maskColor="rgba(15, 23, 42, 0.8)" 
+          className="bg-slate-800" 
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </ReactFlow>
     </div>
   );
 }
