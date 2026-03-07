@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "shared": ["../../packages/shared/types.ts"] 
     }
   },
   "include": [

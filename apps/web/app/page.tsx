@@ -9,6 +9,8 @@ import {
   useNodesState,
   useEdgesState,
   BackgroundVariant,
+  Node,
+  Edge,
 } from "@xyflow/react";
 import { Search, Loader2 } from "lucide-react";
 
@@ -21,8 +23,8 @@ export default function RepoLensDashboard() {
   const [statusText, setStatusText] = useState("");
 
   // React Flow state hooks
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // 1. Submit the Job to the Worker
   const handleAnalyze = async (e: React.FormEvent) => {
