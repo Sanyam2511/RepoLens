@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -20,5 +20,18 @@ export const downloadRepo = (repoUrl: string): string => {
     } catch (error) {
         console.error("Git clone failed:", error);
         throw new Error("Could not clone repository.");
+    }
+};
+
+export const getRepoCommitSha = (repoPath: string): string | null => {
+    try {
+        const output = execFileSync('git', ['-C', repoPath, 'rev-parse', 'HEAD'], {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+        const sha = output.trim();
+        return sha.length > 0 ? sha : null;
+    } catch {
+        return null;
     }
 };

@@ -5,3 +5,19 @@ services:
     ports:
       - "6379:6379"
     restart: always
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: repolens-postgres
+    environment:
+      POSTGRES_USER: repolens
+      POSTGRES_PASSWORD: repolens
+      POSTGRES_DB: repolens
+    ports:
+      - "5433:5432"
+    volumes:
+      - repolens-postgres:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  repolens-postgres:
