@@ -2,9 +2,13 @@
   "name": "shared",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "types.ts",
+  "types": "types.ts",
+  "exports": {
+    ".": "./types.ts"
+  },
   "scripts": {
-    "dev": "ts-node-dev --esm --respawn src/index.ts"
+    "dev": "ts-node-dev --esm --respawn types.ts"
   },
   "dependencies": {
     "shared": "*", 
