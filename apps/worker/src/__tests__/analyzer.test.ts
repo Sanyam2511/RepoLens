@@ -27,6 +27,9 @@ describe("analyzeRepo", () => {
     expect(findNode("test-fixtures/sample/index.ts")).toBeTruthy();
     expect(findNode("test-fixtures/sample/api.ts")).toBeTruthy();
     expect(findNode("test-fixtures/sample/storage.ts")).toBeTruthy();
+    expect(findNode("test-fixtures/sample/readme.md")).toBeTruthy();
+    expect(findNode("test-fixtures/sample/main.py")).toBeTruthy();
+    expect(findNode("test-fixtures/sample/utils.py")).toBeTruthy();
   });
 
   it("creates import edges for local modules", () => {
@@ -35,6 +38,9 @@ describe("analyzeRepo", () => {
     ).toBeTruthy();
     expect(
       findEdge("test-fixtures/sample/index.ts", "test-fixtures/sample/storage.ts", "imports")
+    ).toBeTruthy();
+    expect(
+      findEdge("test-fixtures/sample/main.py", "test-fixtures/sample/utils.py", "imports")
     ).toBeTruthy();
   });
 
@@ -67,5 +73,7 @@ describe("analyzeRepo", () => {
   it("includes code snippets for file nodes", () => {
     const indexNode = findNode("test-fixtures/sample/index.ts");
     expect(indexNode?.codeSnippet).toBeTruthy();
+    const readmeNode = findNode("test-fixtures/sample/readme.md");
+    expect(readmeNode?.codeSnippet).toContain("fixture");
   });
 });

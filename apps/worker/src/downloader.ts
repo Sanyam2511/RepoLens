@@ -1,10 +1,20 @@
 import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+
+const getTempRoot = () => {
+    const configured = process.env.REPOLENS_TEMP_DIR?.trim();
+    if (configured) {
+        return path.resolve(configured);
+    }
+
+    return path.join(os.tmpdir(), 'repolens');
+};
 
 export const downloadRepo = (repoUrl: string): string => {
     const repoName = `repo-${Date.now()}`;
-    const tempDir = path.resolve('temp');
+    const tempDir = getTempRoot();
     const targetPath = path.join(tempDir, repoName);
 
     if (!fs.existsSync(tempDir)) {
@@ -14,7 +24,7 @@ export const downloadRepo = (repoUrl: string): string => {
     console.log(`> Cloning: ${repoUrl}`);
     
     try {
-        execSync(`git clone --depth 1 ${repoUrl} "${targetPath}"`, { stdio: 'inherit' });
+        execSync(`git -c core.longpaths=true clone --depth 1 ${repoUrl} "${targetPath}"`, { stdio: 'inherit' });
         
         return targetPath;
     } catch (error) {
