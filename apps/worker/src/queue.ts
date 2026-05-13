@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq';
 import { downloadRepo, getRepoCommitSha } from './downloader.js';
-import { analyzeRepo } from './analyzer.js';
+import { analyzeRepo, type AnalysisProgress } from './analyzer.js';
 import { saveAnalysis } from './storage.js';
 import fs from 'node:fs';
 
@@ -8,15 +8,24 @@ export const analysisQueue = new Queue('analysis-queue', {
     connection: { host: 'localhost', port: 6379 }
 });
 
+const ANALYSIS_LOCK_DURATION_MS = 20 * 60 * 1000;
+const ANALYSIS_STALLED_INTERVAL_MS = 60 * 1000;
+
 const worker = new Worker('analysis-queue', async (job) => {
     const { repoUrl } = job.data;
     console.log(`\n[Job ${job.id}] ⏳ Starting analysis for: ${repoUrl}`);
 
     let localPath = '';
+    const reportProgress = (update: AnalysisProgress) => {
+        void job.updateProgress(update);
+    };
 
     try {
+        reportProgress({ phase: "queued", percent: 1, detail: "Queued for analysis" });
+        reportProgress({ phase: "cloning", percent: 2, detail: "Cloning repository" });
         localPath = downloadRepo(repoUrl);
-        const result = analyzeRepo(localPath);
+        reportProgress({ phase: "indexing", percent: 5, detail: "Starting analysis" });
+        const result = await analyzeRepo(localPath, reportProgress);
         const commitSha = getRepoCommitSha(localPath);
 
         try {
@@ -36,7 +45,11 @@ const worker = new Worker('analysis-queue', async (job) => {
         }
     }
 }, {
-    connection: { host: 'localhost', port: 6379 }
+    connection: { host: 'localhost', port: 6379 },
+    // Long-running analyses can block the event loop; extend the lock to avoid false stalls.
+    lockDuration: ANALYSIS_LOCK_DURATION_MS,
+    stalledInterval: ANALYSIS_STALLED_INTERVAL_MS,
+    maxStalledCount: 2
 });
 
 worker.on('failed', (job, err) => {

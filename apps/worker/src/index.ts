@@ -112,8 +112,9 @@ app.get('/status/:jobId', async (req, res) => {
         const state = await job.getState();
         const result = job.returnvalue;
         const failedReason = job.failedReason;
+        const progress = job.progress;
 
-        res.json({ state, result, failedReason });
+        res.json({ state, result, failedReason, progress });
     } catch (error) {
         console.error('Failed to fetch job status:', error);
         res.status(500).json({ error: 'Failed to fetch job status' });

@@ -8,6 +8,45 @@ const MAX_SNIPPET_CHARS = 4000;
 const MAX_SNIPPET_BYTES = 12000;
 const MAX_PARSE_BYTES = 200000;
 
+export type AnalysisProgress = {
+    phase: string;
+    percent?: number;
+    current?: number;
+    total?: number;
+    detail?: string;
+};
+
+type ProgressReporter = (update: AnalysisProgress) => void;
+
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+const clampPercent = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+const computePercent = (start: number, end: number, current: number, total: number) => {
+    if (total <= 0) return end;
+    const ratio = Math.min(1, Math.max(0, current / total));
+    return start + (end - start) * ratio;
+};
+
+const getProgressStep = (total: number, targetUpdates = 50) =>
+    Math.max(1, Math.floor(total / targetUpdates));
+
+const makeProgressReporter = (reporter?: ProgressReporter) => {
+    let lastYield = 0;
+
+    return async (update: AnalysisProgress) => {
+        if (!reporter) return;
+        const percent = typeof update.percent === "number" ? clampPercent(update.percent) : undefined;
+        reporter({ ...update, percent });
+
+        const now = Date.now();
+        if (now - lastYield > 200) {
+            lastYield = now;
+            await yieldToEventLoop();
+        }
+    };
+};
+
 const IGNORED_DIRS = new Set([
     ".git",
     "node_modules",
@@ -723,9 +762,17 @@ const resolveRelativeSourceFile = (
     return null;
 };
 
-export const analyzeRepo = (repoPath: string): RepoGraph => {
+export const analyzeRepo = async (
+    repoPath: string,
+    onProgress?: ProgressReporter
+): Promise<RepoGraph> => {
+    const reportProgress = makeProgressReporter(onProgress);
+
+    await reportProgress({ phase: "indexing", percent: 4, detail: "Loading source files" });
     const project = new Project();
     project.addSourceFilesAtPaths(path.join(repoPath, "**/*.{ts,js,tsx,jsx}"));
+
+    await reportProgress({ phase: "indexing", percent: 8, detail: "Scanning repository" });
 
     const nodeMap = new Map<string, RepoNode>();
     const edges: RepoEdge[] = [];
@@ -735,6 +782,12 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
     const fileIndex = buildFileIndex(repoPath, allFiles);
     const goModulePath = readGoModulePath(repoPath);
     const dartPackageName = readDartPackageName(repoPath);
+
+    await reportProgress({
+        phase: "indexing",
+        percent: 10,
+        detail: `${allFiles.length} files discovered`
+    });
 
     const addNode = (node: RepoNode, preferSnippet = false) => {
         const existing = nodeMap.get(node.id);
@@ -780,7 +833,9 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
         addNode(node, true);
     };
 
-    allFiles.forEach((filePath) => {
+    const fileStep = getProgressStep(allFiles.length);
+    for (let i = 0; i < allFiles.length; i += 1) {
+        const filePath = allFiles[i];
         const snippet = readFileSnippet(filePath);
         const node: RepoNode = {
             id: filePath,
@@ -793,17 +848,34 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
         }
 
         addNode(node);
-    });
+
+        if (i % fileStep === 0 || i === allFiles.length - 1) {
+            await reportProgress({
+                phase: "cataloging",
+                current: i + 1,
+                total: allFiles.length,
+                percent: computePercent(10, 40, i + 1, allFiles.length),
+                detail: `${i + 1}/${allFiles.length} files`
+            });
+        }
+    }
 
     const sourceFiles = project
         .getSourceFiles()
         .filter((sourceFile) => !isIgnoredPath(sourceFile.getFilePath()));
-    sourceFiles.forEach(addFileNode);
 
-    sourceFiles.forEach(sourceFile => {
+    if (sourceFiles.length === 0) {
+        await reportProgress({ phase: "parsing-ts", percent: 70, detail: "No TS/JS sources" });
+    }
+
+    const sourceStep = getProgressStep(sourceFiles.length);
+    for (let i = 0; i < sourceFiles.length; i += 1) {
+        const sourceFile = sourceFiles[i];
         const filePath = sourceFile.getFilePath();
 
-        sourceFile.getImportDeclarations().forEach(importDecl => {
+        addFileNode(sourceFile);
+
+        sourceFile.getImportDeclarations().forEach((importDecl) => {
             const moduleSpecifier = importDecl.getModuleSpecifierValue();
             if (!moduleSpecifier.startsWith(".")) return;
 
@@ -823,7 +895,7 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
             });
         });
 
-        sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach(call => {
+        sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((call) => {
             const expression = call.getExpression();
 
             if (expression.getKind() === SyntaxKind.Identifier && expression.getText() === "require") {
@@ -867,7 +939,7 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
             }
         });
 
-        sourceFile.getDescendantsOfKind(SyntaxKind.Identifier).forEach(id => {
+        sourceFile.getDescendantsOfKind(SyntaxKind.Identifier).forEach((id) => {
             const name = id.getText();
             const dbTypes = ["Schema", "model", "PrismaClient"];
 
@@ -881,18 +953,38 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
                 });
             }
         });
-    });
+
+        if (i % sourceStep === 0 || i === sourceFiles.length - 1) {
+            await reportProgress({
+                phase: "parsing-ts",
+                current: i + 1,
+                total: sourceFiles.length,
+                percent: computePercent(40, 70, i + 1, sourceFiles.length),
+                detail: `${i + 1}/${sourceFiles.length} TS/JS files`
+            });
+        }
+    }
 
     const jsTsExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
-    allFiles.forEach((filePath) => {
+    const dependencyFiles = allFiles.filter((filePath) => {
         const ext = path.extname(filePath).toLowerCase();
-        if (jsTsExtensions.has(ext)) return;
+        if (jsTsExtensions.has(ext)) return false;
+        return Boolean(DEPENDENCY_PARSERS[ext]);
+    });
 
+    if (dependencyFiles.length === 0) {
+        await reportProgress({ phase: "parsing-deps", percent: 92, detail: "No extra languages" });
+    }
+
+    const dependencyStep = getProgressStep(dependencyFiles.length);
+    for (let i = 0; i < dependencyFiles.length; i += 1) {
+        const filePath = dependencyFiles[i];
+        const ext = path.extname(filePath).toLowerCase();
         const parser = DEPENDENCY_PARSERS[ext];
-        if (!parser) return;
+        if (!parser) continue;
 
         const text = readFileText(filePath);
-        if (!text) return;
+        if (!text) continue;
 
         const refs = parser(text);
         refs.forEach((ref) => {
@@ -905,7 +997,19 @@ export const analyzeRepo = (repoPath: string): RepoGraph => {
                 label: ref.label
             });
         });
-    });
+
+        if (i % dependencyStep === 0 || i === dependencyFiles.length - 1) {
+            await reportProgress({
+                phase: "parsing-deps",
+                current: i + 1,
+                total: dependencyFiles.length,
+                percent: computePercent(70, 92, i + 1, dependencyFiles.length),
+                detail: `${i + 1}/${dependencyFiles.length} files`
+            });
+        }
+    }
+
+    await reportProgress({ phase: "finalizing", percent: 100, detail: "Graph ready" });
 
     return { nodes: Array.from(nodeMap.values()), edges };
 };

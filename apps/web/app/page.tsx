@@ -53,6 +53,14 @@ type FlowNodeData = {
 
 type StatusTone = "idle" | "info" | "success" | "error";
 
+type JobProgress = {
+  phase?: string;
+  percent?: number;
+  current?: number;
+  total?: number;
+  detail?: string;
+};
+
 const ZOOM_PRESETS = {
   overview: {
     fitPadding: 0.35,
@@ -261,6 +269,7 @@ export default function RepoLensDashboard() {
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [statusTone, setStatusTone] = useState<StatusTone>("idle");
+  const [progress, setProgress] = useState<JobProgress | null>(null);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("detail");
   const [graphData, setGraphData] = useState<RepoGraph | null>(null);
   const [selectedNode, setSelectedNode] = useState<FlowNodeData | null>(null);
@@ -340,6 +349,7 @@ export default function RepoLensDashboard() {
     setLoading(true);
     setStatusText("Initializing analysis...");
     setStatusTone("info");
+    setProgress({ phase: "Queued", percent: 1 });
     setGraphData(null);
     setSelectedNode(null);
     setSelectedNodeId(null);
@@ -358,6 +368,7 @@ export default function RepoLensDashboard() {
       if (data.cached && data.result) {
         setStatusText("Loaded from cache. Rendering map...");
         setStatusTone("success");
+        setProgress(null);
         setGraphData(data.result);
         setLoading(false);
         return;
@@ -370,12 +381,14 @@ export default function RepoLensDashboard() {
       } else {
         setStatusText("Failed to queue job.");
         setStatusTone("error");
+        setProgress(null);
         setLoading(false);
       }
     } catch (error) {
       console.error(error);
       setStatusText("Error connecting to the worker engine.");
       setStatusTone("error");
+      setProgress(null);
       setLoading(false);
     }
   };
@@ -391,21 +404,26 @@ export default function RepoLensDashboard() {
           clearInterval(interval);
           setStatusText("Analysis complete! Rendering map...");
           setStatusTone("success");
+          setProgress({ phase: "Complete", percent: 100 });
           setGraphData(data.result);
           setLoading(false);
         } else if (data.state === "failed") {
           clearInterval(interval);
           setStatusText(`Analysis failed: ${data.failedReason}`);
           setStatusTone("error");
+          setProgress(null);
           setLoading(false);
         } else {
-          setStatusText(`Processing: ${data.state}...`);
           setStatusTone("info");
+          const normalized = normalizeProgress(data.progress);
+          setProgress(normalized);
+          setStatusText(formatProgress(normalized) ?? `Processing: ${data.state}...`);
         }
       } catch (error) {
         clearInterval(interval);
         setStatusText("Lost connection to worker.");
         setStatusTone("error");
+        setProgress(null);
         setLoading(false);
       }
     }, 2000); // Check every 2 seconds
@@ -515,6 +533,41 @@ export default function RepoLensDashboard() {
     mapDataToCanvas(graphData.nodes, graphData.edges, typeFilters);
   }, [graphData, typeFilters, mapDataToCanvas]);
 
+  const normalizeProgress = (raw: unknown): JobProgress | null => {
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return { percent: Math.max(0, Math.min(100, Math.round(raw))) };
+    }
+    if (typeof raw === "object") {
+      const value = raw as Record<string, unknown>;
+      const percent =
+        typeof value.percent === "number" && Number.isFinite(value.percent)
+          ? Math.max(0, Math.min(100, Math.round(value.percent)))
+          : undefined;
+      return {
+        percent,
+        phase: typeof value.phase === "string" ? value.phase : undefined,
+        detail: typeof value.detail === "string" ? value.detail : undefined,
+        current: typeof value.current === "number" ? value.current : undefined,
+        total: typeof value.total === "number" ? value.total : undefined,
+      };
+    }
+    return null;
+  };
+
+  const formatProgress = (value: JobProgress | null) => {
+    if (!value) return null;
+    const phase = value.phase ?? "Processing";
+    const percentText =
+      typeof value.percent === "number" ? ` ${value.percent}%` : "";
+    const detailText = value.detail
+      ? ` - ${value.detail}`
+      : value.current !== undefined && value.total !== undefined
+        ? ` - ${value.current}/${value.total}`
+        : "";
+    return `${phase}${percentText}${detailText}`;
+  };
+
   const statusClass =
     statusTone === "error"
       ? "text-rose-600"
@@ -530,6 +583,18 @@ export default function RepoLensDashboard() {
   const totalNodes = graphData?.nodes.length ?? 0;
   const totalEdges = graphData?.edges.length ?? 0;
   const hasVisibleNodes = nodes.length > 0;
+  const legendCounts = graphData?.nodes.reduce(
+    (acc, node) => {
+      acc[node.type] = (acc[node.type] ?? 0) + 1;
+      return acc;
+    },
+    {
+      file: 0,
+      "api-endpoint": 0,
+      storage: 0,
+      folder: 0,
+    } as Record<RepoNode["type"], number>
+  );
 
   return (
     <div className="w-screen h-screen relative bg-[#f7f5f0] text-slate-900 overflow-hidden">
@@ -685,6 +750,14 @@ export default function RepoLensDashboard() {
               <span className={`text-xs ${statusClass}`}>Session status</span>
             </div>
           )}
+          {statusText && progress && typeof progress.percent === "number" && (
+            <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-slate-900 transition-[width] duration-300"
+                style={{ width: `${Math.max(2, Math.min(100, progress.percent))}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -757,6 +830,30 @@ export default function RepoLensDashboard() {
         <Background color="#e2e8f0" variant={BackgroundVariant.Lines} gap={36} size={1} />
         <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
       </ReactFlow>
+
+      <div className="absolute bottom-6 right-6 z-10 hidden lg:block">
+        <div className="glass-panel rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-lg">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.3em] text-slate-500">
+            <span>Legend</span>
+            <span>{hasVisibleNodes ? `${nodes.length} visible` : `${totalNodes} total`}</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {FILTER_ITEMS.map((item) => (
+              <div key={item.type} className="flex items-center justify-between gap-6 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
+                  <span>
+                    {item.icon} {item.label}
+                  </span>
+                </div>
+                <span className="font-mono text-[11px] text-slate-500">
+                  {legendCounts ? legendCounts[item.type] : 0}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {!loading && !hasVisibleNodes && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

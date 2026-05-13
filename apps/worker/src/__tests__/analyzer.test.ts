@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyzeRepo } from "../analyzer.js";
@@ -6,16 +6,27 @@ import { analyzeRepo } from "../analyzer.js";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = path.resolve(testDir, "../../test-fixtures/sample");
 
-const graph = analyzeRepo(fixtureRoot);
+let graph: Awaited<ReturnType<typeof analyzeRepo>>;
+
+beforeAll(async () => {
+  graph = await analyzeRepo(fixtureRoot);
+});
+
+const getGraph = () => {
+  if (!graph) {
+    throw new Error("Graph not initialized");
+  }
+  return graph;
+};
 
 const endsWithPath = (value: string, suffix: string) =>
   path.normalize(value).endsWith(path.normalize(suffix));
 
 const findNode = (suffix: string) =>
-  graph.nodes.find((node) => endsWithPath(node.id, suffix));
+  getGraph().nodes.find((node) => endsWithPath(node.id, suffix));
 
 const findEdge = (sourceSuffix: string, targetSuffix: string, label: string) =>
-  graph.edges.find(
+  getGraph().edges.find(
     (edge) =>
       endsWithPath(edge.source, sourceSuffix) &&
       endsWithPath(edge.target, targetSuffix) &&
@@ -45,10 +56,10 @@ describe("analyzeRepo", () => {
   });
 
   it("creates API endpoint nodes and edges", () => {
-    const apiNode = graph.nodes.find((node) => node.id === "api-https://api.example.com/data");
+    const apiNode = getGraph().nodes.find((node) => node.id === "api-https://api.example.com/data");
     expect(apiNode).toBeTruthy();
 
-    const apiEdge = graph.edges.find(
+    const apiEdge = getGraph().edges.find(
       (edge) =>
         endsWithPath(edge.source, "test-fixtures/sample/index.ts") &&
         edge.target === "api-https://api.example.com/data" &&
@@ -58,10 +69,10 @@ describe("analyzeRepo", () => {
   });
 
   it("creates storage nodes and edges", () => {
-    const storageNode = graph.nodes.find((node) => node.id === "database-layer");
+    const storageNode = getGraph().nodes.find((node) => node.id === "database-layer");
     expect(storageNode).toBeTruthy();
 
-    const storageEdge = graph.edges.find(
+    const storageEdge = getGraph().edges.find(
       (edge) =>
         endsWithPath(edge.source, "test-fixtures/sample/storage.ts") &&
         edge.target === "database-layer" &&
