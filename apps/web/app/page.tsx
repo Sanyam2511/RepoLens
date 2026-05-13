@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   ReactFlow,
-  MiniMap,
   Controls,
   Background,
   useNodesState,
@@ -17,7 +16,7 @@ import {
 import dagre from "dagre";
 import { Search, Loader2 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // We import the shared types so the frontend knows exactly what to expect
 import { RepoNode, RepoEdge, RepoGraph } from "shared";
@@ -423,7 +422,13 @@ export default function RepoLensDashboard() {
         const isStorage = node.type === "storage";
         const isFolder = node.type === "folder";
         const icon = isApi ? "🌐 " : isStorage ? "🗄️ " : isFolder ? "🗂️ " : "📄 ";
-        const background = isApi ? "#059669" : isStorage ? "#ca8a04" : isFolder ? "#475569" : "#1e293b";
+        const accent = isApi
+          ? "#0f766e"
+          : isStorage
+            ? "#b45309"
+            : isFolder
+              ? "#64748b"
+              : "#2563eb";
 
         return {
           id: node.id,
@@ -436,11 +441,12 @@ export default function RepoLensDashboard() {
           },
           type: "default",
           style: {
-            background,
-            color: "#f8fafc",
-            border: "1px solid #334155",
-            borderRadius: "8px",
-            padding: "12px",
+            background: "#ffffff",
+            color: "#0f172a",
+            border: "1px solid #e2e8f0",
+            borderLeft: `4px solid ${accent}`,
+            borderRadius: "12px",
+            padding: "12px 14px",
             width: NODE_WIDTH,
             height: NODE_HEIGHT,
             fontSize: "13px",
@@ -448,7 +454,7 @@ export default function RepoLensDashboard() {
             lineHeight: "1.35",
             whiteSpace: "normal" as const,
             textAlign: "left" as const,
-            boxShadow: isApi || isStorage ? "0 0 15px rgba(255,255,255,0.1)" : "none",
+            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
           },
         };
       });
@@ -461,8 +467,8 @@ export default function RepoLensDashboard() {
           target: edge.target,
           label: edge.label,
           type: "smoothstep",
-          animated: true,
-          style: { stroke: "#38bdf8", strokeWidth: 2 },
+          animated: false,
+          style: { stroke: "#94a3b8", strokeWidth: 1.5 },
         }));
 
       const nodeById = new Map(canvasNodes.map((node) => [node.id, node]));
@@ -511,28 +517,46 @@ export default function RepoLensDashboard() {
 
   const statusClass =
     statusTone === "error"
-      ? "text-rose-300"
+      ? "text-rose-600"
       : statusTone === "success"
-        ? "text-emerald-300"
-        : "text-slate-300";
+        ? "text-emerald-600"
+        : "text-slate-500";
+  const statusBadgeClass =
+    statusTone === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : statusTone === "success"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-slate-200 bg-white/70 text-slate-600";
   const totalNodes = graphData?.nodes.length ?? 0;
   const totalEdges = graphData?.edges.length ?? 0;
   const hasVisibleNodes = nodes.length > 0;
 
   return (
-    <div className="w-screen h-screen relative bg-slate-900 text-white overflow-hidden">
+    <div className="w-screen h-screen relative bg-[#f7f5f0] text-slate-900 overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none" aria-hidden>
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at 20% 10%, rgba(254, 243, 199, 0.85), transparent 55%), radial-gradient(circle at 85% 15%, rgba(219, 234, 254, 0.75), transparent 50%), radial-gradient(circle at 20% 90%, rgba(224, 231, 255, 0.6), transparent 55%)",
+          }}
+        />
+        <div className="absolute -top-32 -right-20 h-[320px] w-[320px] rounded-full bg-amber-100/70 blur-3xl" />
+        <div className="absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full bg-sky-100/70 blur-3xl" />
+      </div>
+
       {/* Command Panel */}
-      <div className="absolute top-6 left-6 z-20 w-[min(560px,92vw)]">
-        <div className="glass-panel glass-panel-strong rounded-3xl p-4 md:p-5 shadow-2xl">
+      <div className="absolute top-6 left-6 z-20 w-[min(620px,92vw)]">
+        <div className="glass-panel glass-panel-strong rounded-3xl p-4 md:p-5 shadow-xl">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.35em] text-slate-400">
+              <div className="text-[11px] uppercase tracking-[0.35em] text-slate-500">
                 RepoLens
               </div>
-              <div className="mt-2 text-2xl font-semibold text-white">
+              <div className="mt-2 text-2xl font-semibold text-slate-900">
                 Visualize repo architecture
               </div>
-              <div className="mt-2 text-sm text-slate-300">
+              <div className="mt-2 text-sm text-slate-600">
                 Paste a GitHub URL to map files, APIs, and storage dependencies.
               </div>
             </div>
@@ -540,7 +564,7 @@ export default function RepoLensDashboard() {
               <button
                 type="button"
                 onClick={handleFitView}
-                className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200 hover:bg-white/20"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700 shadow-sm hover:bg-slate-50"
               >
                 Fit
               </button>
@@ -550,20 +574,20 @@ export default function RepoLensDashboard() {
                 disabled={!selectedNodeId}
                 className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] transition ${
                   selectedNodeId
-                    ? "border-emerald-300/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
-                    : "border-slate-700/60 bg-slate-800/50 text-slate-500"
+                    ? "border-emerald-300 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25"
+                    : "border-slate-200 bg-slate-100 text-slate-500"
                 }`}
               >
                 Focus
               </button>
-              <div className="rounded-full border border-white/10 bg-white/5 p-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
+              <div className="rounded-full border border-slate-200 bg-slate-100 p-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                 <button
                   type="button"
                   onClick={() => setZoomMode("overview")}
                   className={`rounded-full px-2 py-1 transition ${
                     zoomMode === "overview"
-                      ? "bg-white/20 text-white"
-                      : "text-slate-400 hover:text-slate-200"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
                   Overview
@@ -573,8 +597,8 @@ export default function RepoLensDashboard() {
                   onClick={() => setZoomMode("detail")}
                   className={`rounded-full px-2 py-1 transition ${
                     zoomMode === "detail"
-                      ? "bg-white/20 text-white"
-                      : "text-slate-400 hover:text-slate-200"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
                   Detail
@@ -584,15 +608,17 @@ export default function RepoLensDashboard() {
           </div>
           <form
             onSubmit={handleAnalyze}
-            className={`mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-2 flex items-center shadow-2xl transition-shadow ${
-              isSearchFocused ? "ring-2 ring-cyan-400/40 shadow-[0_0_30px_rgba(34,211,238,0.35)]" : ""
+            className={`mt-4 flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white/80 p-2 shadow-[0_12px_24px_rgba(15,23,42,0.08)] backdrop-blur transition ${
+              isSearchFocused ? "ring-2 ring-slate-900/10" : ""
             }`}
           >
-            <Search className="text-slate-400 ml-3 w-5 h-5" />
+            <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/70 bg-slate-100/80">
+              <Search className="h-4 w-4 text-slate-500" />
+            </div>
             <input
               type="text"
               placeholder="https://github.com/expressjs/express"
-              className="flex-1 bg-transparent border-none outline-none px-4 py-3 text-slate-100 placeholder-slate-500 text-sm md:text-base"
+              className="flex-1 bg-transparent border-none outline-none px-2 py-2 text-slate-900 placeholder-slate-400 text-sm md:text-base"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
@@ -602,19 +628,19 @@ export default function RepoLensDashboard() {
             <button
               type="submit"
               disabled={loading}
-              className="bg-cyan-500 hover:bg-cyan-400 transition-colors px-6 py-3 rounded-xl font-semibold text-slate-900 flex items-center"
+              className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analyze"}
             </button>
           </form>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
             {SAMPLE_REPOS.map((sample) => (
               <button
                 key={sample.url}
                 type="button"
                 onClick={() => setRepoUrl(sample.url)}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.15em] text-slate-200 hover:bg-white/15"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.15em] text-slate-600 shadow-sm hover:bg-slate-50"
               >
                 {sample.label}
               </button>
@@ -625,7 +651,7 @@ export default function RepoLensDashboard() {
             <button
               type="button"
               onClick={handleFitView}
-              className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700"
             >
               Fit
             </button>
@@ -635,8 +661,8 @@ export default function RepoLensDashboard() {
               disabled={!selectedNodeId}
               className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
                 selectedNodeId
-                  ? "border-emerald-300/40 bg-emerald-500/20 text-emerald-100"
-                  : "border-slate-700/60 bg-slate-800/50 text-slate-500"
+                  ? "border-emerald-300 bg-emerald-500/15 text-emerald-700"
+                  : "border-slate-200 bg-slate-100 text-slate-500"
               }`}
             >
               Focus
@@ -644,7 +670,7 @@ export default function RepoLensDashboard() {
             <button
               type="button"
               onClick={() => setZoomMode(zoomMode === "detail" ? "overview" : "detail")}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-600"
             >
               {zoomMode === "detail" ? "Overview" : "Detail"}
             </button>
@@ -652,16 +678,19 @@ export default function RepoLensDashboard() {
           
           {/* Status Indicator */}
           {statusText && (
-            <div className={`text-center mt-4 text-sm font-mono tracking-wide ${statusClass}`}>
-              {statusText}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-mono ${statusBadgeClass}`}>
+                {statusText}
+              </span>
+              <span className={`text-xs ${statusClass}`}>Session status</span>
             </div>
           )}
         </div>
       </div>
 
       <div className="absolute top-6 right-6 z-10 w-72 px-2 hidden lg:block">
-        <div className="glass-panel rounded-2xl p-4 shadow-2xl">
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-slate-400">
+        <div className="glass-panel rounded-2xl p-4 shadow-lg">
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-slate-500">
             <span>Filters</span>
             <span>
               {nodes.length}/{totalNodes}
@@ -677,8 +706,8 @@ export default function RepoLensDashboard() {
                   onClick={() => toggleFilter(item.type)}
                   className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm transition ${
                     active
-                      ? "border-white/15 text-white"
-                      : "border-slate-700/70 text-slate-400"
+                      ? "border-slate-200 bg-white text-slate-900"
+                      : "border-slate-200/70 bg-slate-50 text-slate-500"
                   }`}
                 >
                   <span className="flex items-center gap-2">
@@ -690,14 +719,14 @@ export default function RepoLensDashboard() {
                       {item.icon} {item.label}
                     </span>
                   </span>
-                  <span className={`text-[11px] uppercase ${active ? "text-emerald-300" : "text-slate-500"}`}>
+                  <span className={`text-[11px] uppercase ${active ? "text-emerald-600" : "text-slate-400"}`}>
                     {active ? "on" : "off"}
                   </span>
                 </button>
               );
             })}
           </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
             <span>Visible: {nodes.length}</span>
             <span>
               Edges: {edges.length}/{totalEdges}
@@ -723,20 +752,15 @@ export default function RepoLensDashboard() {
         }}
         minZoom={0.2}
         maxZoom={2}
-        className="w-full h-full"
+        className="w-full h-full bg-transparent"
       >
-        <Background color="#334155" variant={BackgroundVariant.Dots} gap={24} size={2} />
-        <Controls className="bg-slate-800 border-slate-700 fill-white" />
-        <MiniMap 
-          nodeColor={(n) => n.style?.background as string} 
-          maskColor="rgba(15, 23, 42, 0.8)" 
-          className="bg-slate-800" 
-        />
+        <Background color="#e2e8f0" variant={BackgroundVariant.Lines} gap={36} size={1} />
+        <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
       </ReactFlow>
 
       {!loading && !hasVisibleNodes && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="glass-panel rounded-2xl px-6 py-4 text-sm text-slate-200">
+          <div className="glass-panel rounded-2xl px-6 py-4 text-sm text-slate-600">
             {graphData
               ? "No nodes match the current filters."
               : "Paste a public GitHub URL to visualize its architecture."}
@@ -749,16 +773,16 @@ export default function RepoLensDashboard() {
           drawerOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="h-full glass-panel border-l border-slate-700/60 px-6 py-6 flex flex-col">
+        <div className="h-full glass-panel-strong border-l border-slate-200/80 px-6 py-6 flex flex-col">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.25em] text-slate-400">Node Preview</div>
-              <div className="mt-2 text-lg font-semibold text-white">
+              <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">Node Preview</div>
+              <div className="mt-2 text-lg font-semibold text-slate-900">
                 {selectedNode?.rawLabel ?? "Select a node"}
               </div>
               {selectedNode && (
-                <div className="mt-2 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-300">
-                  <span className="rounded-full border border-slate-700/60 bg-slate-800/70 px-2 py-1">
+                <div className="mt-2 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
                     {selectedNode.kind.replace("-", " ")}
                   </span>
                 </div>
@@ -767,21 +791,21 @@ export default function RepoLensDashboard() {
             <button
               type="button"
               onClick={() => setDrawerOpen(false)}
-              className="text-xs uppercase tracking-[0.2em] text-slate-400 hover:text-slate-100 transition"
+              className="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-slate-800 transition"
             >
               Close
             </button>
           </div>
 
-          <div className="mt-6 flex-1 overflow-auto rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4">
+          <div className="mt-6 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white/80 p-4">
             {!selectedNode && (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-slate-500">
                 Select a node to inspect details and code.
               </div>
             )}
 
             {selectedNode && selectedNode.kind !== "file" && (
-              <div className="text-sm text-slate-300">
+              <div className="text-sm text-slate-600">
                 Code preview is available for file nodes. This node represents a {selectedNode.kind.replace("-", " ")}.
               </div>
             )}
@@ -789,10 +813,10 @@ export default function RepoLensDashboard() {
             {selectedNode && selectedNode.kind === "file" && (
               <SyntaxHighlighter
                 language="typescript"
-                style={oneDark}
+                style={oneLight}
                 showLineNumbers
                 customStyle={{ background: "transparent", margin: 0 }}
-                lineNumberStyle={{ color: "rgba(148, 163, 184, 0.6)" }}
+                lineNumberStyle={{ color: "rgba(100, 116, 139, 0.7)" }}
               >
                 {selectedNode.codeSnippet ?? "// No preview available for this file."}
               </SyntaxHighlighter>
