@@ -330,6 +330,25 @@ export default function RepoLensDashboard() {
     );
   }, [nodes, rfInstance, selectedNodeId, zoomMode]);
 
+  const handleZoomIn = useCallback(() => {
+    if (!rfInstance) return;
+    // ReactFlow instance exposes zoom controls on the controls, but call safely via any.
+    try {
+      (rfInstance as any).zoomIn?.();
+    } catch {
+      // fallback: no-op
+    }
+  }, [rfInstance]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!rfInstance) return;
+    try {
+      (rfInstance as any).zoomOut?.();
+    } catch {
+      // fallback: no-op
+    }
+  }, [rfInstance]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -504,11 +523,40 @@ export default function RepoLensDashboard() {
         return layoutWithDagre(componentNodes, component.edges, direction);
       });
 
-      const packedNodes = packComponents(layoutedComponents.map((component) => ({
-        nodes: component.nodes,
-        width: component.width,
-        height: component.height,
-      })));
+      const packedNodes = packComponents(
+        layoutedComponents.map((component) => ({
+          nodes: component.nodes,
+          width: component.width,
+          height: component.height,
+        }))
+      );
+
+      // If layout degenerates into a straight line (many nodes with nearly-equal y),
+      // fallback to a grid layout for better readability.
+      const yValues = packedNodes.map((n) => n.position.y);
+      const meanY = yValues.reduce((s, v) => s + v, 0) / Math.max(1, yValues.length);
+      const varianceY = yValues.reduce((s, v) => s + Math.pow(v - meanY, 2), 0) / Math.max(1, yValues.length);
+      const stddevY = Math.sqrt(varianceY);
+      if (packedNodes.length > 8 && stddevY < 6) {
+        // Large horizontal line detected — spread into a grid
+        const grid = layoutGrid(canvasNodes as Node<FlowNodeData>[]);
+        setNodes(grid.nodes);
+        setEdges(canvasEdges);
+
+        if (rfInstance) {
+          requestAnimationFrame(() => {
+            const preset = ZOOM_PRESETS[zoomMode];
+            rfInstance.fitView({
+              padding: preset.fitPadding,
+              duration: 500,
+              minZoom: preset.fitMinZoom,
+              maxZoom: preset.fitMaxZoom,
+            });
+          });
+        }
+
+        return;
+      }
 
       setNodes(packedNodes);
       setEdges(canvasEdges);
@@ -633,6 +681,22 @@ export default function RepoLensDashboard() {
               >
                 Fit
               </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  −
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleFocusSelected}
