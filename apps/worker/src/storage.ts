@@ -12,6 +12,10 @@ export const getCachedGraph = async (repoUrl: string): Promise<RepoGraph | null>
     return null;
   }
 
+  if (record.edgeCount === 0 && record.nodeCount > 1) {
+    return null;
+  }
+
   return record.graphJson as RepoGraph;
 };
 
