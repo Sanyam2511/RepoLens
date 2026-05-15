@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ReactFlow,
   Controls,
@@ -14,12 +16,13 @@ import {
   ReactFlowInstance,
 } from "@xyflow/react";
 import dagre from "dagre";
-import { Search, Loader2 } from "lucide-react";
+import { ArrowRight, BookOpen, Clock3, Loader2, Search, Sparkles } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // We import the shared types so the frontend knows exactly what to expect
 import { RepoNode, RepoEdge, RepoGraph } from "shared";
+import { getAuthToken } from "../lib/auth";
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 86;
@@ -265,6 +268,7 @@ const packComponents = (
 };
 
 export default function RepoLensDashboard() {
+  const searchParams = useSearchParams();
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
@@ -360,6 +364,13 @@ export default function RepoLensDashboard() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    const presetRepo = searchParams.get("repoUrl");
+    if (presetRepo) {
+      setRepoUrl(presetRepo);
+    }
+  }, [searchParams]);
+
   // 1. Submit the Job to the Worker
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -377,15 +388,19 @@ export default function RepoLensDashboard() {
     setEdges([]);
 
     try {
+      const authToken = getAuthToken();
       const res = await fetch("http://localhost:4000/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({ repoUrl }),
       });
       const data = await res.json();
 
-      if (data.cached && data.result) {
-        setStatusText("Loaded from cache. Rendering map...");
+      if (data.result) {
+        setStatusText(data.cached ? "Loaded from cache. Rendering map..." : "Analysis complete. Rendering map...");
         setStatusTone("success");
         setProgress(null);
         setGraphData(data.result);
@@ -658,9 +673,93 @@ export default function RepoLensDashboard() {
         <div className="absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full bg-sky-100/70 blur-3xl" />
       </div>
 
-      {/* Command Panel */}
-      <div className="absolute top-6 left-6 z-20 w-[min(620px,92vw)]">
-        <div className="glass-panel glass-panel-strong rounded-3xl p-4 md:p-5 shadow-xl">
+      {/* Home / Command Panel */}
+      <div className="absolute top-6 left-6 z-20 w-[min(960px,92vw)] space-y-4">
+        <div className="glass-panel glass-panel-strong rounded-3xl p-5 md:p-6 shadow-xl">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-700">
+                <Sparkles className="h-3.5 w-3.5" /> RepoLens Home
+              </div>
+              <div className="mt-3 text-3xl font-semibold text-slate-900 md:text-4xl">
+                Turn any repository into a readable architecture map.
+              </div>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 md:text-base">
+                RepoLens scans a GitHub repo, resolves imports and runtime dependencies, and visualizes the structure as an interactive graph. Use it to understand code flow, spot disconnected modules, and review previous analyses later.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="#analyze"
+                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  Start analysis <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  Create account
+                </Link>
+                <Link
+                  href="/history"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  <Clock3 className="h-4 w-4" /> View history
+                </Link>
+                <a
+                  href="#how-it-works"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  <BookOpen className="h-4 w-4" /> How it works
+                </a>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 lg:w-[350px] lg:grid-cols-1">
+              {[
+                { label: "1. Paste a repo URL", value: "GitHub repositories only" },
+                { label: "2. Review the graph", value: "Files, APIs, storage" },
+                { label: "3. Revisit history", value: "Open any previous run" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-sm backdrop-blur">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{item.label}</div>
+                  <div className="mt-2 text-sm text-slate-700">{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div id="how-it-works" className="mt-5 grid gap-3 md:grid-cols-3">
+            {[
+              {
+                title: "1. Analyze",
+                text: "Submit any public GitHub repo and RepoLens will queue a backend analysis job.",
+              },
+              {
+                title: "2. Inspect",
+                text: "The resulting structure graph shows files, API calls, storage, and dependency edges.",
+              },
+              {
+                title: "3. Reuse",
+                text: "Open the history page to revisit earlier searches and launch them again in one click.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50/90 p-4">
+                <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+                <div className="mt-1 text-sm leading-6 text-slate-600">{item.text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div id="analyze" className="glass-panel glass-panel-strong rounded-3xl p-4 md:p-5 shadow-xl">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-[11px] uppercase tracking-[0.35em] text-slate-500">

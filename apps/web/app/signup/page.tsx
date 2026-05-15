@@ -1,0 +1,150 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { CheckCircle2, Loader2, LockKeyhole, Mail, Sparkles, UserPlus } from "lucide-react";
+import AuthShell from "../../components/AuthShell";
+import { setAuthSession, workerFetch } from "../../lib/auth";
+
+export default function SignupPage() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await workerFetch("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to create account");
+      }
+
+      setAuthSession(payload);
+      router.push("/history");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to create account");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AuthShell
+      title="Create your RepoLens account"
+      subtitle="Sign up once and keep your analysis history, cached scans, and repository revisits tied to your profile."
+      footer={
+        <div className="space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Already have an account?</div>
+          <p className="text-sm leading-6 text-slate-600">Use your existing credentials to jump straight into the history gallery.</p>
+          <Link href="/login" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+            <CheckCircle2 className="h-4 w-4" /> Sign in
+          </Link>
+        </div>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Name</label>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
+            <UserPlus className="h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="John Doe"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Email</label>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
+            <Mail className="h-4 w-4 text-slate-400" />
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Password</label>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
+            <LockKeyhole className="h-4 w-4 text-slate-400" />
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="At least 8 characters"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">Confirm password</label>
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-slate-900/10">
+            <LockKeyhole className="h-4 w-4 text-slate-400" />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Repeat your password"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              required
+            />
+          </div>
+        </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          Create account
+        </button>
+
+        <p className="text-center text-sm text-slate-600">
+          Already signed up? <Link href="/login" className="font-semibold text-slate-900 underline underline-offset-4">Go to login</Link>
+        </p>
+      </form>
+    </AuthShell>
+  );
+}
