@@ -16,13 +16,17 @@ import {
   ReactFlowInstance,
 } from "@xyflow/react";
 import dagre from "dagre";
-import { ArrowRight, BookOpen, Clock3, Loader2, Search, Sparkles } from "lucide-react";
+import { Clock3, Loader2, Search, Sparkles } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // We import the shared types so the frontend knows exactly what to expect
 import { RepoNode, RepoEdge, RepoGraph } from "shared";
 import { getAuthToken } from "../lib/auth";
+import Header from "../components/Header";
+import Hero from "../components/Hero";
+import Features from "../components/Features";
+import Footer from "../components/Footer";
 
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 86;
@@ -660,75 +664,66 @@ export default function RepoLensDashboard() {
   );
 
   return (
-    <div className="w-screen h-screen relative bg-[#f7f5f0] text-slate-900 overflow-hidden">
+    <div className="w-screen min-h-screen relative page-sky text-slate-900">
       <div className="absolute inset-0 pointer-events-none" aria-hidden>
         <div
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 20% 10%, rgba(254, 243, 199, 0.85), transparent 55%), radial-gradient(circle at 85% 15%, rgba(219, 234, 254, 0.75), transparent 50%), radial-gradient(circle at 20% 90%, rgba(224, 231, 255, 0.6), transparent 55%)",
+              "radial-gradient(circle at 20% 10%, rgba(219, 234, 254, 0.85), transparent 55%), radial-gradient(circle at 85% 15%, rgba(191, 219, 254, 0.6), transparent 50%), radial-gradient(circle at 20% 90%, rgba(224, 231, 255, 0.55), transparent 55%)",
           }}
         />
-        <div className="absolute -top-32 -right-20 h-[320px] w-[320px] rounded-full bg-amber-100/70 blur-3xl" />
-        <div className="absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full bg-sky-100/70 blur-3xl" />
+        <div className="absolute -top-32 -right-20 h-[320px] w-[320px] rounded-full bg-sky-100/80 blur-3xl" />
+        <div className="absolute -bottom-40 -left-24 h-[420px] w-[420px] rounded-full bg-emerald-100/70 blur-3xl" />
       </div>
 
-      {/* Home / Command Panel */}
-      <div className="absolute top-6 left-6 z-20 w-[min(960px,92vw)] space-y-4">
-        <div className="glass-panel glass-panel-strong rounded-3xl p-5 md:p-6 shadow-xl">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-700">
-                <Sparkles className="h-3.5 w-3.5" /> RepoLens Home
+      <Header />
+
+      <main className="relative z-10">
+        <Hero />
+        <Features />
+
+        <section className="mx-auto w-[min(1200px,94vw)] mt-16 section-wave px-6 py-10">
+          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-start">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
+                <Sparkles className="h-4 w-4" /> Live workspace
               </div>
-              <div className="mt-3 text-3xl font-semibold text-slate-900 md:text-4xl">
-                Turn any repository into a readable architecture map.
-              </div>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 md:text-base">
-                RepoLens scans a GitHub repo, resolves imports and runtime dependencies, and visualizes the structure as an interactive graph. Use it to understand code flow, spot disconnected modules, and review previous analyses later.
+              <h2 className="mt-4 text-3xl md:text-4xl text-slate-900">Visualize repo architecture in seconds.</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Paste a GitHub URL, run the analyzer, and explore the interactive graph. Save every run to your history and
+                share findings with teammates.
               </p>
 
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
-                  href="#analyze"
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                >
-                  Start analysis <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
                   href="/login"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
                   Sign in
                 </Link>
                 <Link
                   href="/signup"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
                   Create account
                 </Link>
                 <Link
                   href="/history"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white shadow-sm transition hover:bg-slate-800"
                 >
                   <Clock3 className="h-4 w-4" /> View history
                 </Link>
-                <a
-                  href="#how-it-works"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                  <BookOpen className="h-4 w-4" /> How it works
-                </a>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 lg:w-[350px] lg:grid-cols-1">
+            <div className="grid gap-3">
               {[
                 { label: "1. Paste a repo URL", value: "GitHub repositories only" },
                 { label: "2. Review the graph", value: "Files, APIs, storage" },
                 { label: "3. Revisit history", value: "Open any previous run" },
               ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white/85 p-4 shadow-sm backdrop-blur">
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{item.label}</div>
                   <div className="mt-2 text-sm text-slate-700">{item.value}</div>
                 </div>
@@ -736,354 +731,340 @@ export default function RepoLensDashboard() {
             </div>
           </div>
 
-          <div id="how-it-works" className="mt-5 grid gap-3 md:grid-cols-3">
-            {[
-              {
-                title: "1. Analyze",
-                text: "Submit any public GitHub repo and RepoLens will queue a backend analysis job.",
-              },
-              {
-                title: "2. Inspect",
-                text: "The resulting structure graph shows files, API calls, storage, and dependency edges.",
-              },
-              {
-                title: "3. Reuse",
-                text: "Open the history page to revisit earlier searches and launch them again in one click.",
-              },
-            ].map((item) => (
-              <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50/90 p-4">
-                <div className="text-sm font-semibold text-slate-900">{item.title}</div>
-                <div className="mt-1 text-sm leading-6 text-slate-600">{item.text}</div>
+          <div id="analyze" className="mt-10 rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_22px_54px_rgba(15,23,42,0.12)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.35em] text-slate-500">
+                  RepoLens
+                </div>
+                <div className="mt-2 text-2xl text-slate-900">
+                  Visualize repo architecture
+                </div>
+                <div className="mt-2 text-sm text-slate-600">
+                  Paste a GitHub URL to map files, APIs, and storage dependencies.
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div id="analyze" className="glass-panel glass-panel-strong rounded-3xl p-4 md:p-5 shadow-xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.35em] text-slate-500">
-                RepoLens
-              </div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">
-                Visualize repo architecture
-              </div>
-              <div className="mt-2 text-sm text-slate-600">
-                Paste a GitHub URL to map files, APIs, and storage dependencies.
+              <div className="hidden sm:flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleFitView}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Fit
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleZoomIn}
+                    className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleZoomOut}
+                    className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    −
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleFocusSelected}
+                  disabled={!selectedNodeId}
+                  className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] transition ${
+                    selectedNodeId
+                      ? "border-emerald-300 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25"
+                      : "border-slate-200 bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  Focus
+                </button>
+                <div className="rounded-full border border-slate-200 bg-slate-100 p-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  <button
+                    type="button"
+                    onClick={() => setZoomMode("overview")}
+                    className={`rounded-full px-2 py-1 transition ${
+                      zoomMode === "overview"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZoomMode("detail")}
+                    className={`rounded-full px-2 py-1 transition ${
+                      zoomMode === "detail"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Detail
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="hidden sm:flex flex-col gap-2">
+            <form
+              onSubmit={handleAnalyze}
+              className={`mt-4 flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white/80 p-2 shadow-[0_12px_24px_rgba(15,23,42,0.08)] backdrop-blur transition ${
+                isSearchFocused ? "ring-2 ring-slate-900/10" : ""
+              }`}
+            >
+              <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/70 bg-slate-100/80">
+                <Search className="h-4 w-4 text-slate-500" />
+              </div>
+              <input
+                type="text"
+                placeholder="https://github.com/expressjs/express"
+                className="flex-1 bg-transparent border-none outline-none px-2 py-2 text-slate-900 placeholder-slate-400 text-sm md:text-base"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analyze"}
+              </button>
+            </form>
+
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+              {SAMPLE_REPOS.map((sample) => (
+                <button
+                  key={sample.url}
+                  type="button"
+                  onClick={() => setRepoUrl(sample.url)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.15em] text-slate-600 shadow-sm hover:bg-slate-50"
+                >
+                  {sample.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 sm:hidden">
               <button
                 type="button"
                 onClick={handleFitView}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700 shadow-sm hover:bg-slate-50"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700"
               >
                 Fit
               </button>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleZoomIn}
-                  className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  onClick={handleZoomOut}
-                  className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                >
-                  −
-                </button>
-              </div>
               <button
                 type="button"
                 onClick={handleFocusSelected}
                 disabled={!selectedNodeId}
-                className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] transition ${
+                className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
                   selectedNodeId
-                    ? "border-emerald-300 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25"
+                    ? "border-emerald-300 bg-emerald-500/15 text-emerald-700"
                     : "border-slate-200 bg-slate-100 text-slate-500"
                 }`}
               >
                 Focus
               </button>
-              <div className="rounded-full border border-slate-200 bg-slate-100 p-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                <button
-                  type="button"
-                  onClick={() => setZoomMode("overview")}
-                  className={`rounded-full px-2 py-1 transition ${
-                    zoomMode === "overview"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  Overview
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setZoomMode("detail")}
-                  className={`rounded-full px-2 py-1 transition ${
-                    zoomMode === "detail"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  Detail
-                </button>
-              </div>
-            </div>
-          </div>
-          <form
-            onSubmit={handleAnalyze}
-            className={`mt-4 flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-white/80 p-2 shadow-[0_12px_24px_rgba(15,23,42,0.08)] backdrop-blur transition ${
-              isSearchFocused ? "ring-2 ring-slate-900/10" : ""
-            }`}
-          >
-            <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/70 bg-slate-100/80">
-              <Search className="h-4 w-4 text-slate-500" />
-            </div>
-            <input
-              type="text"
-              placeholder="https://github.com/expressjs/express"
-              className="flex-1 bg-transparent border-none outline-none px-2 py-2 text-slate-900 placeholder-slate-400 text-sm md:text-base"
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analyze"}
-            </button>
-          </form>
-
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-            {SAMPLE_REPOS.map((sample) => (
               <button
-                key={sample.url}
                 type="button"
-                onClick={() => setRepoUrl(sample.url)}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.15em] text-slate-600 shadow-sm hover:bg-slate-50"
+                onClick={() => setZoomMode(zoomMode === "detail" ? "overview" : "detail")}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-600"
               >
-                {sample.label}
+                {zoomMode === "detail" ? "Overview" : "Detail"}
               </button>
-            ))}
-          </div>
-
-          <div className="mt-3 flex items-center gap-2 sm:hidden">
-            <button
-              type="button"
-              onClick={handleFitView}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-700"
-            >
-              Fit
-            </button>
-            <button
-              type="button"
-              onClick={handleFocusSelected}
-              disabled={!selectedNodeId}
-              className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
-                selectedNodeId
-                  ? "border-emerald-300 bg-emerald-500/15 text-emerald-700"
-                  : "border-slate-200 bg-slate-100 text-slate-500"
-              }`}
-            >
-              Focus
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoomMode(zoomMode === "detail" ? "overview" : "detail")}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-600"
-            >
-              {zoomMode === "detail" ? "Overview" : "Detail"}
-            </button>
-          </div>
-          
-          {/* Status Indicator */}
-          {statusText && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-mono ${statusBadgeClass}`}>
-                {statusText}
-              </span>
-              <span className={`text-xs ${statusClass}`}>Session status</span>
             </div>
-          )}
-          {statusText && progress && typeof progress.percent === "number" && (
-            <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-slate-900 transition-[width] duration-300"
-                style={{ width: `${Math.max(2, Math.min(100, progress.percent))}%` }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div className="absolute top-6 right-6 z-10 w-72 px-2 hidden lg:block">
-        <div className="glass-panel rounded-2xl p-4 shadow-lg">
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-slate-500">
-            <span>Filters</span>
-            <span>
-              {nodes.length}/{totalNodes}
-            </span>
-          </div>
-          <div className="mt-4 space-y-2">
-            {FILTER_ITEMS.map((item) => {
-              const active = typeFilters[item.type];
-              return (
-                <button
-                  key={item.type}
-                  type="button"
-                  onClick={() => toggleFilter(item.type)}
-                  className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm transition ${
-                    active
-                      ? "border-slate-200 bg-white text-slate-900"
-                      : "border-slate-200/70 bg-slate-50 text-slate-500"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ background: item.color, opacity: active ? 1 : 0.35 }}
-                    />
-                    <span>
-                      {item.icon} {item.label}
-                    </span>
-                  </span>
-                  <span className={`text-[11px] uppercase ${active ? "text-emerald-600" : "text-slate-400"}`}>
-                    {active ? "on" : "off"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-            <span>Visible: {nodes.length}</span>
-            <span>
-              Edges: {edges.length}/{totalEdges}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* The React Flow Canvas */}
-      <ReactFlow<Node<FlowNodeData>>
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        onPaneClick={handlePaneClick}
-        onInit={setRfInstance}
-        fitView
-        fitViewOptions={{
-          padding: ZOOM_PRESETS[zoomMode].fitPadding,
-          minZoom: ZOOM_PRESETS[zoomMode].fitMinZoom,
-          maxZoom: ZOOM_PRESETS[zoomMode].fitMaxZoom,
-        }}
-        minZoom={0.2}
-        maxZoom={2}
-        className="w-full h-full bg-transparent"
-      >
-        <Background color="#e2e8f0" variant={BackgroundVariant.Lines} gap={36} size={1} />
-        <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
-      </ReactFlow>
-
-      <div className="absolute bottom-6 right-6 z-10 hidden lg:block">
-        <div className="glass-panel rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-lg">
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.3em] text-slate-500">
-            <span>Legend</span>
-            <span>{hasVisibleNodes ? `${nodes.length} visible` : `${totalNodes} total`}</span>
-          </div>
-          <div className="mt-3 space-y-2">
-            {FILTER_ITEMS.map((item) => (
-              <div key={item.type} className="flex items-center justify-between gap-6 text-xs text-slate-600">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
-                  <span>
-                    {item.icon} {item.label}
-                  </span>
-                </div>
-                <span className="font-mono text-[11px] text-slate-500">
-                  {legendCounts ? legendCounts[item.type] : 0}
+            {statusText && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-mono ${statusBadgeClass}`}>
+                  {statusText}
                 </span>
+                <span className={`text-xs ${statusClass}`}>Session status</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {!loading && !hasVisibleNodes && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="glass-panel rounded-2xl px-6 py-4 text-sm text-slate-600">
-            {graphData
-              ? "No nodes match the current filters."
-              : "Paste a public GitHub URL to visualize its architecture."}
-          </div>
-        </div>
-      )}
-
-      <div
-        className={`absolute top-0 right-0 h-full w-full max-w-lg z-20 transform transition-transform duration-300 ${
-          drawerOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <div className="h-full glass-panel-strong border-l border-slate-200/80 px-6 py-6 flex flex-col">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">Node Preview</div>
-              <div className="mt-2 text-lg font-semibold text-slate-900">
-                {selectedNode?.rawLabel ?? "Select a node"}
+            )}
+            {statusText && progress && typeof progress.percent === "number" && (
+              <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-slate-900 transition-[width] duration-300"
+                  style={{ width: `${Math.max(2, Math.min(100, progress.percent))}%` }}
+                />
               </div>
-              {selectedNode && (
-                <div className="mt-2 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-                    {selectedNode.kind.replace("-", " ")}
-                  </span>
+            )}
+          </div>
+
+          <div className="mt-8 relative rounded-[36px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
+            <div className="relative h-[560px] sm:h-[620px] lg:h-[720px]">
+              <ReactFlow<Node<FlowNodeData>>
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={handleNodeClick}
+                onPaneClick={handlePaneClick}
+                onInit={setRfInstance}
+                fitView
+                fitViewOptions={{
+                  padding: ZOOM_PRESETS[zoomMode].fitPadding,
+                  minZoom: ZOOM_PRESETS[zoomMode].fitMinZoom,
+                  maxZoom: ZOOM_PRESETS[zoomMode].fitMaxZoom,
+                }}
+                minZoom={0.2}
+                maxZoom={2}
+                zoomOnScroll={false}
+                zoomOnPinch={false}
+                zoomOnDoubleClick={false}
+                panOnScroll={false}
+                className="w-full h-full bg-transparent"
+              >
+                <Background color="#d1d9e0" variant={BackgroundVariant.Lines} gap={36} size={1} />
+                <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
+              </ReactFlow>
+
+              <div className="absolute top-4 right-4 hidden lg:block">
+                <div className="glass-panel rounded-2xl p-4 shadow-lg w-72">
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-slate-500">
+                    <span>Filters</span>
+                    <span>
+                      {nodes.length}/{totalNodes}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {FILTER_ITEMS.map((item) => {
+                      const active = typeFilters[item.type];
+                      return (
+                        <button
+                          key={item.type}
+                          type="button"
+                          onClick={() => toggleFilter(item.type)}
+                          className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm transition ${
+                            active
+                              ? "border-slate-200 bg-white text-slate-900"
+                              : "border-slate-200/70 bg-slate-50 text-slate-500"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ background: item.color, opacity: active ? 1 : 0.35 }}
+                            />
+                            <span>
+                              {item.icon} {item.label}
+                            </span>
+                          </span>
+                          <span className={`text-[11px] uppercase ${active ? "text-emerald-600" : "text-slate-400"}`}>
+                            {active ? "on" : "off"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+                    <span>Visible: {nodes.length}</span>
+                    <span>
+                      Edges: {edges.length}/{totalEdges}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="absolute bottom-4 right-4 hidden lg:block">
+                <div className="glass-panel rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-lg">
+                  <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                    <span>Legend</span>
+                    <span>{hasVisibleNodes ? `${nodes.length} visible` : `${totalNodes} total`}</span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {FILTER_ITEMS.map((item) => (
+                      <div key={item.type} className="flex items-center justify-between gap-6 text-xs text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
+                          <span>
+                            {item.icon} {item.label}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {legendCounts ? legendCounts[item.type] : 0}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {!loading && !hasVisibleNodes && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="glass-panel rounded-2xl px-6 py-4 text-sm text-slate-600">
+                    {graphData
+                      ? "No nodes match the current filters."
+                      : "Paste a public GitHub URL to visualize its architecture."}
+                  </div>
                 </div>
               )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(false)}
-              className="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-slate-800 transition"
-            >
-              Close
-            </button>
-          </div>
 
-          <div className="mt-6 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white/80 p-4">
-            {!selectedNode && (
-              <div className="text-sm text-slate-500">
-                Select a node to inspect details and code.
-              </div>
-            )}
-
-            {selectedNode && selectedNode.kind !== "file" && (
-              <div className="text-sm text-slate-600">
-                Code preview is available for file nodes. This node represents a {selectedNode.kind.replace("-", " ")}.
-              </div>
-            )}
-
-            {selectedNode && selectedNode.kind === "file" && (
-              <SyntaxHighlighter
-                language="typescript"
-                style={oneLight}
-                showLineNumbers
-                customStyle={{ background: "transparent", margin: 0 }}
-                lineNumberStyle={{ color: "rgba(100, 116, 139, 0.7)" }}
+              <div
+                className={`absolute top-0 right-0 h-full w-full max-w-lg z-20 transform transition-transform duration-300 ${
+                  drawerOpen ? "translate-x-0" : "translate-x-full"
+                }`}
               >
-                {selectedNode.codeSnippet ?? "// No preview available for this file."}
-              </SyntaxHighlighter>
-            )}
+                <div className="h-full glass-panel-strong border-l border-slate-200/80 px-6 py-6 flex flex-col">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">Node Preview</div>
+                      <div className="mt-2 text-lg font-semibold text-slate-900">
+                        {selectedNode?.rawLabel ?? "Select a node"}
+                      </div>
+                      {selectedNode && (
+                        <div className="mt-2 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
+                            {selectedNode.kind.replace("-", " ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerOpen(false)}
+                      className="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-slate-800 transition"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="mt-6 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white/80 p-4">
+                    {!selectedNode && (
+                      <div className="text-sm text-slate-500">
+                        Select a node to inspect details and code.
+                      </div>
+                    )}
+
+                    {selectedNode && selectedNode.kind !== "file" && (
+                      <div className="text-sm text-slate-600">
+                        Code preview is available for file nodes. This node represents a {selectedNode.kind.replace("-", " ")}.
+                      </div>
+                    )}
+
+                    {selectedNode && selectedNode.kind === "file" && (
+                      <SyntaxHighlighter
+                        language="typescript"
+                        style={oneLight}
+                        showLineNumbers
+                        customStyle={{ background: "transparent", margin: 0 }}
+                        lineNumberStyle={{ color: "rgba(100, 116, 139, 0.7)" }}
+                      >
+                        {selectedNode.codeSnippet ?? "// No preview available for this file."}
+                      </SyntaxHighlighter>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
+
+      <Footer />
     </div>
   );
 }
