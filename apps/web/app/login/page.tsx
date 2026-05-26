@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCircle2, Loader2, LockKeyhole, Mail, Sparkles, User } from "lucide-react";
+import { Loader2, LockKeyhole, Mail, Sparkles, User } from "lucide-react";
 import AuthShell from "../../components/AuthShell";
 import { setAuthSession, workerFetch } from "../../lib/auth";
 

@@ -195,21 +195,21 @@ export default function HistoryPage() {
   const emptyState = !loading && visibleHistory.length === 0;
 
   return (
-    <div className="min-h-screen bg-[#f7f5f0] text-slate-900">
+    <div className="min-h-screen page-sky text-slate-900">
       <div className="absolute inset-0 pointer-events-none" aria-hidden>
         <div
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 18% 12%, rgba(254, 243, 199, 0.88), transparent 52%), radial-gradient(circle at 82% 12%, rgba(219, 234, 254, 0.7), transparent 48%), radial-gradient(circle at 20% 88%, rgba(224, 231, 255, 0.66), transparent 54%)",
+              "radial-gradient(circle at 18% 12%, rgba(219, 234, 254, 0.85), transparent 52%), radial-gradient(circle at 82% 12%, rgba(191, 219, 254, 0.6), transparent 48%), radial-gradient(circle at 20% 88%, rgba(224, 231, 255, 0.55), transparent 54%)",
           }}
         />
-        <div className="absolute -top-32 -right-20 h-[280px] w-[280px] rounded-full bg-amber-100/70 blur-3xl" />
-        <div className="absolute -bottom-36 -left-20 h-[380px] w-[380px] rounded-full bg-sky-100/70 blur-3xl" />
+        <div className="absolute -top-32 -right-20 h-[280px] w-[280px] rounded-full bg-sky-100/80 blur-3xl" />
+        <div className="absolute -bottom-36 -left-20 h-[380px] w-[380px] rounded-full bg-emerald-100/70 blur-3xl" />
       </div>
 
       <div className="relative z-10 mx-auto max-w-[1700px] px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200/80 bg-white/80 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 section-wave border border-slate-200/70 bg-white/90 p-4 backdrop-blur">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
               <Sparkles className="h-3.5 w-3.5" /> RepoLens History
@@ -255,7 +255,7 @@ export default function HistoryPage() {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)_360px]">
-          <aside className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+          <aside className="soft-card rounded-3xl bg-white/90 p-4 backdrop-blur">
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
                 <History className="h-5 w-5" />
@@ -324,7 +324,7 @@ export default function HistoryPage() {
             </div>
           </aside>
 
-          <main className="rounded-3xl border border-slate-200/80 bg-white/75 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+          <main className="soft-card rounded-3xl bg-white/90 p-4 backdrop-blur">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Analysis gallery</div>
@@ -437,7 +437,7 @@ export default function HistoryPage() {
             )}
           </main>
 
-          <aside className="rounded-3xl border border-slate-200/80 bg-white/85 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+          <aside className="soft-card rounded-3xl bg-white/90 p-4 backdrop-blur">
             {selectedAnalysis && selectedSummary ? (
               <>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
