@@ -47,7 +47,7 @@ export default function LoginPage() {
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Need an account?</div>
           <p className="text-sm leading-6 text-slate-600">Create one in a minute and keep your past repository analyses in one place.</p>
-          <Link href="/signup" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+          <Link href="/signup" className="brand-button inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition">
             <Sparkles className="h-4 w-4" /> Create account
           </Link>
         </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+          className="brand-button inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <User className="h-4 w-4" />}
           Sign in
