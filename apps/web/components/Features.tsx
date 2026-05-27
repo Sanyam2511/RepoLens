@@ -58,7 +58,7 @@ export default function Features() {
         </div>
       </div>
 
-      <div className="section-wave mt-10 px-8 py-10">
+      <div className="mt-10 px-8 py-10">
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-center">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">RepoLens insights</div>

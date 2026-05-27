@@ -16,13 +16,13 @@ import {
   ReactFlowInstance,
 } from "@xyflow/react";
 import dagre from "dagre";
-import { Clock3, Loader2, Search, Sparkles } from "lucide-react";
+import { Loader2, Search, Sparkles } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // We import the shared types so the frontend knows exactly what to expect
 import { RepoNode, RepoEdge, RepoGraph } from "shared";
-import { getAuthToken } from "../lib/auth";
+import { workerFetch } from "../lib/auth";
 import Header from "../components/Header";
 import Hero from "../components/Hero";
 import Features from "../components/Features";
@@ -89,12 +89,11 @@ const FILTER_ITEMS: Array<{
   type: RepoNode["type"];
   label: string;
   color: string;
-  icon: string;
 }> = [
-  { type: "file", label: "Files", color: "#1e293b", icon: "📄" },
-  { type: "api-endpoint", label: "API Calls", color: "#059669", icon: "🌐" },
-  { type: "storage", label: "Storage", color: "#ca8a04", icon: "🗄️" },
-  { type: "folder", label: "Folders", color: "#475569", icon: "🗂️" },
+  { type: "file", label: "Files", color: "#1e293b" },
+  { type: "api-endpoint", label: "API Calls", color: "#059669" },
+  { type: "storage", label: "Storage", color: "#ca8a04" },
+  { type: "folder", label: "Folders", color: "#475569" },
 ];
 
 const measureBounds = (nodes: Node<FlowNodeData>[]) => {
@@ -392,13 +391,8 @@ export default function RepoLensDashboard() {
     setEdges([]);
 
     try {
-      const authToken = getAuthToken();
-      const res = await fetch("http://localhost:4000/analyze", {
+      const res = await workerFetch("/analyze", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
         body: JSON.stringify({ repoUrl }),
       });
       const data = await res.json();
@@ -435,7 +429,7 @@ export default function RepoLensDashboard() {
   const pollJobStatus = async (jobId: string) => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:4000/status/${jobId}`);
+        const res = await workerFetch(`/status/${jobId}`);
         const data = await res.json();
 
         if (data.state === "completed") {
@@ -477,7 +471,6 @@ export default function RepoLensDashboard() {
         const isApi = node.type === "api-endpoint";
         const isStorage = node.type === "storage";
         const isFolder = node.type === "folder";
-        const icon = isApi ? "🌐 " : isStorage ? "🗄️ " : isFolder ? "🗂️ " : "📄 ";
         const accent = isApi
           ? "#0f766e"
           : isStorage
@@ -490,7 +483,7 @@ export default function RepoLensDashboard() {
           id: node.id,
           position: { x: 0, y: 0 },
           data: {
-            label: `${icon}${node.label}`,
+            label: node.label,
             rawLabel: node.label,
             kind: node.type,
             codeSnippet: node.codeSnippet,
@@ -664,8 +657,8 @@ export default function RepoLensDashboard() {
   );
 
   return (
-    <div className="w-screen min-h-screen relative page-sky text-slate-900">
-      <div className="absolute inset-0 pointer-events-none" aria-hidden>
+    <div className="min-h-screen relative page-sky text-slate-900">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
         <div
           className="absolute inset-0"
           style={{
@@ -683,7 +676,7 @@ export default function RepoLensDashboard() {
         <Hero />
         <Features />
 
-        <section className="mx-auto w-[min(1200px,94vw)] mt-16 section-wave px-6 py-10">
+        <section className="mx-auto w-[min(1200px,94vw)] mt-16 section-wave section-wave-lifted overflow-x-clip px-6 py-10">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-start">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
@@ -709,10 +702,10 @@ export default function RepoLensDashboard() {
                   Create account
                 </Link>
                 <Link
-                  href="/history"
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white shadow-sm transition hover:bg-slate-800"
+                  href="/how-it-works"
+                  className="brand-button inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
                 >
-                  <Clock3 className="h-4 w-4" /> View history
+                  <Sparkles className="h-4 w-4" /> How it works
                 </Link>
               </div>
             </div>
@@ -828,7 +821,7 @@ export default function RepoLensDashboard() {
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+                className="brand-button rounded-full px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-70"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analyze"}
               </button>
@@ -894,7 +887,7 @@ export default function RepoLensDashboard() {
             )}
           </div>
 
-          <div className="mt-8 relative rounded-[36px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
+          <div className="mt-8 relative overflow-hidden rounded-[36px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
             <div className="relative h-[560px] sm:h-[620px] lg:h-[720px]">
               <ReactFlow<Node<FlowNodeData>>
                 nodes={nodes}
@@ -950,7 +943,7 @@ export default function RepoLensDashboard() {
                               style={{ background: item.color, opacity: active ? 1 : 0.35 }}
                             />
                             <span>
-                              {item.icon} {item.label}
+                              {item.label}
                             </span>
                           </span>
                           <span className={`text-[11px] uppercase ${active ? "text-emerald-600" : "text-slate-400"}`}>
@@ -981,7 +974,7 @@ export default function RepoLensDashboard() {
                         <div className="flex items-center gap-2">
                           <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
                           <span>
-                            {item.icon} {item.label}
+                            {item.label}
                           </span>
                         </div>
                         <span className="font-mono text-[11px] text-slate-500">
@@ -1004,7 +997,7 @@ export default function RepoLensDashboard() {
               )}
 
               <div
-                className={`absolute top-0 right-0 h-full w-full max-w-lg z-20 transform transition-transform duration-300 ${
+                className={`absolute inset-y-0 right-0 z-20 w-full max-w-lg transform transition-transform duration-300 ${
                   drawerOpen ? "translate-x-0" : "translate-x-full"
                 }`}
               >

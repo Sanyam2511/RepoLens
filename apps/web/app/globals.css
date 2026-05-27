@@ -6,6 +6,20 @@
   color-scheme: light;
 }
 
+html,
+body {
+  width: 100%;
+  overflow-x: clip;
+}
+
+html {
+  overflow-y: auto;
+}
+
+body {
+  overflow: visible;
+}
+
 body {
   background-color: #d8eef9;
   color: #0f172a;
@@ -48,6 +62,12 @@ h3,
   z-index: -1;
 }
 
+.section-wave-lifted::before {
+  top: -20px;
+  height: 40px;
+  border-radius: 0 0 44px 44px;
+}
+
 .soft-card {
   border: 1px solid rgba(148, 163, 184, 0.3);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
@@ -66,4 +86,17 @@ h3,
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(148, 163, 184, 0.34);
   box-shadow: 0 30px 74px rgba(15, 23, 42, 0.16);
+}
+
+.brand-button {
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+  color: #0f172a;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.09);
+}
+
+.brand-button:hover {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.32);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
 }
