@@ -23,6 +23,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "RepoLens",
   description: "Visualize repository architecture as an interactive graph.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
