@@ -761,6 +761,13 @@ export default function RepoLensDashboard() {
     (repoNodes: RepoNode[], repoEdges: RepoEdge[], filters: Record<RepoNode["type"], boolean>) => {
       const visibleNodes = repoNodes.filter((node) => filters[node.type]);
       const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+      const visibleFilePaths = visibleNodes.filter((node) => node.type === "file").map((node) => node.id);
+      const repoRoot = getCommonPathPrefix(visibleFilePaths);
+      const visibleFileClusterById = new Map(
+        visibleNodes
+          .filter((node) => node.type === "file")
+          .map((node) => [node.id, getFileClusterKey(node.id, repoRoot)] as const)
+      );
 
       const canvasNodes = visibleNodes.map((node) => {
         const accent = node.type === "api-endpoint"
@@ -797,6 +804,16 @@ export default function RepoLensDashboard() {
 
       const canvasEdges = repoEdges
         .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+        .filter((edge) => {
+          if (edge.label !== "imports") return true;
+
+          const sourceCluster = visibleFileClusterById.get(edge.source);
+          const targetCluster = visibleFileClusterById.get(edge.target);
+
+          if (!sourceCluster || !targetCluster) return true;
+
+          return sourceCluster === targetCluster;
+        })
         .map((edge, index) => ({
           id: `e-${index}`,
           source: edge.source,
