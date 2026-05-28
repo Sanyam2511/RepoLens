@@ -27,14 +27,59 @@ import Header from "../components/Header";
 import Hero from "../components/Hero";
 import Features from "../components/Features";
 import Footer from "../components/Footer";
+import { NODE_TYPES, type GraphNodeData } from "../components/GraphNodes";
 
-const NODE_WIDTH = 260;
-const NODE_HEIGHT = 86;
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 80;
 const GRID_GAP_X = 80;
 const GRID_GAP_Y = 70;
 const COMPONENT_GAP_X = 160;
 const COMPONENT_GAP_Y = 160;
 const MAX_ROW_WIDTH = 1800;
+const ISLAND_MIN_WIDTH = 360;
+const ISLAND_HEADER_HEIGHT = 72;
+const ISLAND_PADDING_X = 24;
+const ISLAND_PADDING_Y = 22;
+const ISLAND_GAP_X = 120;
+const ISLAND_GAP_Y = 110;
+
+const CLUSTER_COLORS = ["#2563eb", "#0f766e", "#b45309", "#7c3aed", "#0f172a", "#be123c"];
+
+const RELATION_COLORS: Record<string, string> = {
+  imports: "#4f46e5",
+  calls: "#0f766e",
+  persists: "#b45309",
+  uses: "#7c3aed",
+  includes: "#2563eb",
+  requires: "#0891b2",
+  sources: "#be123c",
+};
+
+const TOP_LEVEL_MODULES = new Set([
+  "apps",
+  "packages",
+  "src",
+  "app",
+  "lib",
+  "pages",
+  "components",
+  "features",
+  "modules",
+  "services",
+  "server",
+  "client",
+  "routes",
+  "api",
+  "tests",
+  "test",
+  "spec",
+  "cmd",
+  "internal",
+  "examples",
+  "example",
+  "docs",
+  "scripts",
+]);
 
 const SAMPLE_REPOS = [
   {
@@ -51,12 +96,7 @@ const SAMPLE_REPOS = [
   },
 ];
 
-type FlowNodeData = {
-  label: string;
-  rawLabel: string;
-  kind: RepoNode["type"];
-  codeSnippet?: string;
-};
+type FlowNodeData = GraphNodeData;
 
 type StatusTone = "idle" | "info" | "success" | "error";
 
@@ -71,13 +111,13 @@ type JobProgress = {
 const ZOOM_PRESETS = {
   overview: {
     fitPadding: 0.35,
-    fitMinZoom: 0.25,
+    fitMinZoom: 0.08,
     fitMaxZoom: 1.0,
     focusZoom: 0.9,
   },
   detail: {
     fitPadding: 0.2,
-    fitMinZoom: 0.55,
+    fitMinZoom: 0.12,
     fitMaxZoom: 1.6,
     focusZoom: 1.25,
   },
@@ -196,6 +236,261 @@ const layoutGrid = (nodes: Node<FlowNodeData>[]) => {
 
   const bounds = measureBounds(gridNodes);
   return { nodes: gridNodes, width: bounds.width, height: bounds.height };
+};
+
+const normalizePath = (value: string) => value.replace(/\\/g, "/");
+
+const splitPath = (value: string) => normalizePath(value).split("/").filter(Boolean);
+
+const getCommonPathPrefix = (values: string[]) => {
+  if (values.length === 0) return "";
+
+  const segments = values.map((value) => splitPath(value));
+  let prefix = segments[0] ?? [];
+
+  for (const current of segments.slice(1)) {
+    let index = 0;
+    while (index < prefix.length && index < current.length && prefix[index] === current[index]) {
+      index += 1;
+    }
+    prefix = prefix.slice(0, index);
+    if (prefix.length === 0) break;
+  }
+
+  return prefix.join("/");
+};
+
+const hashString = (value: string) => {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+};
+
+const formatClusterLabel = (key: string) => {
+  if (key === "root files") return "Root files";
+  if (key === "shared nodes") return "Shared nodes";
+  if (key === "external services") return "External services";
+  if (key === "data layer") return "Data layer";
+
+  return key
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/[-_]+/g, " "))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" / ");
+};
+
+const pickClusterColor = (key: string) => CLUSTER_COLORS[hashString(key) % CLUSTER_COLORS.length] ?? CLUSTER_COLORS[0];
+
+const getRelationColor = (label: string) => RELATION_COLORS[label] ?? "#94a3b8";
+
+const getFileClusterKey = (filePath: string, repoRoot: string) => {
+  const relativeSegments = splitPath(filePath).slice(splitPath(repoRoot).length);
+  const dirSegments = relativeSegments.slice(0, -1);
+
+  if (dirSegments.length === 0) {
+    return "root files";
+  }
+
+  const first = dirSegments[0] ?? "root files";
+  const second = dirSegments[1];
+
+  if (first === "packages" || first === "apps") {
+    return second ? `${first}/${second}` : first;
+  }
+
+  if (TOP_LEVEL_MODULES.has(first)) {
+    return second ? `${first}/${second}` : first;
+  }
+
+  return dirSegments.length >= 2 && second ? `${first}/${second}` : first;
+};
+
+const getFallbackClusterKey = (node: Node<FlowNodeData>) => {
+  if (node.data.kind === "api-endpoint") return "external services";
+  if (node.data.kind === "storage") return "data layer";
+  if (node.data.kind === "folder") return "shared nodes";
+  return "shared nodes";
+};
+
+const layoutClusteredIslands = (nodes: Node<FlowNodeData>[], edges: Edge[]) => {
+  if (nodes.length === 0) {
+    return { nodes, width: 0, height: 0 };
+  }
+
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const repoRoot = getCommonPathPrefix(nodes.filter((node) => node.data.kind === "file").map((node) => node.id));
+  const clusterByNodeId = new Map<string, string>();
+  const adjacency = new Map<string, Set<string>>();
+
+  nodes.forEach((node) => adjacency.set(node.id, new Set()));
+  edges.forEach((edge) => {
+    adjacency.get(edge.source)?.add(edge.target);
+    adjacency.get(edge.target)?.add(edge.source);
+  });
+
+  nodes.forEach((node) => {
+    if (node.data.kind === "file") {
+      clusterByNodeId.set(node.id, getFileClusterKey(node.id, repoRoot));
+    }
+  });
+
+  const fallbackClusterByNeighbors = (nodeId: string) => {
+    const counts = new Map<string, number>();
+    adjacency.get(nodeId)?.forEach((neighborId) => {
+      const neighborNode = nodeMap.get(neighborId);
+      if (!neighborNode || neighborNode.data.kind !== "file") return;
+      const clusterKey = clusterByNodeId.get(neighborId);
+      if (!clusterKey) return;
+      counts.set(clusterKey, (counts.get(clusterKey) ?? 0) + 1);
+    });
+
+    let winner = "";
+    let maxCount = 0;
+    counts.forEach((count, key) => {
+      if (count > maxCount) {
+        winner = key;
+        maxCount = count;
+      }
+    });
+
+    return winner || getFallbackClusterKey(nodeMap.get(nodeId) as Node<FlowNodeData>);
+  };
+
+  nodes.forEach((node) => {
+    if (!clusterByNodeId.has(node.id)) {
+      clusterByNodeId.set(node.id, fallbackClusterByNeighbors(node.id));
+    }
+  });
+
+  const clusters = new Map<string, Node<FlowNodeData>[]>();
+  nodes.forEach((node) => {
+    const clusterKey = clusterByNodeId.get(node.id) ?? "shared nodes";
+    const items = clusters.get(clusterKey) ?? [];
+    items.push(node);
+    clusters.set(clusterKey, items);
+  });
+
+  const clusterLayouts = Array.from(clusters.entries()).map(([clusterKey, clusterNodes]) => {
+    const clusterEdges = edges.filter(
+      (edge) => clusterByNodeId.get(edge.source) === clusterKey && clusterByNodeId.get(edge.target) === clusterKey
+    );
+
+    const label = formatClusterLabel(clusterKey);
+    const accent = pickClusterColor(clusterKey);
+    const fileCount = clusterNodes.filter((node) => node.data.kind === "file").length;
+    const apiCount = clusterNodes.filter((node) => node.data.kind === "api-endpoint").length;
+    const storageCount = clusterNodes.filter((node) => node.data.kind === "storage").length;
+    const folderCount = clusterNodes.filter((node) => node.data.kind === "folder").length;
+
+    const summary = [
+      fileCount ? `${fileCount} files` : null,
+      apiCount ? `${apiCount} APIs` : null,
+      storageCount ? `${storageCount} storage` : null,
+      folderCount ? `${folderCount} folders` : null,
+    ]
+      .filter(Boolean)
+      .join(" • ") || "Connected module island";
+
+    const layout = clusterEdges.length > 0 && clusterNodes.length > 2
+      ? layoutWithDagre(clusterNodes, clusterEdges, "TB")
+      : layoutGrid(clusterNodes);
+
+    const width = Math.max(layout.width + ISLAND_PADDING_X * 2, ISLAND_MIN_WIDTH);
+    const height = Math.max(layout.height + ISLAND_PADDING_Y * 2 + ISLAND_HEADER_HEIGHT, 220);
+
+    return {
+      clusterKey,
+      label,
+      accent,
+      summary,
+      nodes: layout.nodes,
+      width,
+      height,
+    };
+  });
+
+  clusterLayouts.sort((left, right) => right.nodes.length - left.nodes.length || left.label.localeCompare(right.label));
+
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+  const packedNodes: Node<FlowNodeData>[] = [];
+
+  clusterLayouts.forEach((cluster) => {
+    if (cursorX > 0 && cursorX + cluster.width > MAX_ROW_WIDTH) {
+      cursorX = 0;
+      cursorY += rowHeight + ISLAND_GAP_Y;
+      rowHeight = 0;
+    }
+
+    packedNodes.push({
+      id: `cluster-${cluster.clusterKey}`,
+      type: "clusterNode",
+      position: { x: cursorX, y: cursorY },
+      selectable: false,
+      draggable: false,
+      connectable: false,
+      focusable: false,
+      zIndex: 0,
+      data: {
+        label: cluster.label,
+        rawLabel: cluster.clusterKey,
+        kind: "cluster",
+        isCluster: true,
+        clusterLabel: cluster.label,
+        clusterSize: cluster.nodes.length,
+        clusterSummary: cluster.summary,
+        accent: cluster.accent,
+      },
+      style: {
+        width: cluster.width,
+        height: cluster.height,
+        pointerEvents: "none",
+      },
+    });
+
+    cluster.nodes.forEach((node) => {
+      packedNodes.push({
+        ...node,
+        type: "analysisNode",
+        position: {
+          x: node.position.x + cursorX + ISLAND_PADDING_X,
+          y: node.position.y + cursorY + ISLAND_HEADER_HEIGHT,
+        },
+        zIndex: 2,
+        data: {
+          ...node.data,
+          clusterLabel: cluster.label,
+          clusterSummary: cluster.summary,
+          accent: cluster.accent,
+          pathLabel: node.data.kind === "file"
+            ? splitPath(node.id).slice(-4).join("/")
+            : node.data.kind === "api-endpoint"
+              ? "External endpoint"
+              : node.data.kind === "storage"
+                ? "Shared state"
+                : "Structure",
+        },
+      });
+    });
+
+    cursorX += cluster.width + ISLAND_GAP_X;
+    rowHeight = Math.max(rowHeight, cluster.height);
+  });
+
+  const bounds = measureBounds(packedNodes.filter((node) => node.type !== "clusterNode"));
+  const normalizedNodes = packedNodes.map((node) => ({
+    ...node,
+    position: {
+      x: node.position.x - bounds.minX,
+      y: node.position.y - bounds.minY,
+    },
+  }));
+
+  return { nodes: normalizedNodes, width: bounds.width, height: bounds.height };
 };
 
 const buildComponents = (nodes: Node<FlowNodeData>[], edges: Edge[]) => {
@@ -468,14 +763,11 @@ export default function RepoLensDashboard() {
       const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
 
       const canvasNodes = visibleNodes.map((node) => {
-        const isApi = node.type === "api-endpoint";
-        const isStorage = node.type === "storage";
-        const isFolder = node.type === "folder";
-        const accent = isApi
+        const accent = node.type === "api-endpoint"
           ? "#0f766e"
-          : isStorage
+          : node.type === "storage"
             ? "#b45309"
-            : isFolder
+            : node.type === "folder"
               ? "#64748b"
               : "#2563eb";
 
@@ -487,23 +779,18 @@ export default function RepoLensDashboard() {
             rawLabel: node.label,
             kind: node.type,
             codeSnippet: node.codeSnippet,
+            accent,
           },
-          type: "default",
+          type: "analysisNode",
+          zIndex: 2,
           style: {
-            background: "#ffffff",
-            color: "#0f172a",
-            border: "1px solid #e2e8f0",
-            borderLeft: `4px solid ${accent}`,
-            borderRadius: "12px",
-            padding: "12px 14px",
             width: NODE_WIDTH,
             height: NODE_HEIGHT,
-            fontSize: "13px",
-            fontWeight: 600,
-            lineHeight: "1.35",
-            whiteSpace: "normal" as const,
-            textAlign: "left" as const,
-            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
+            border: "none",
+            background: "transparent",
+            color: "#0f172a",
+            padding: 0,
+            pointerEvents: "auto",
           },
         };
       });
@@ -514,63 +801,18 @@ export default function RepoLensDashboard() {
           id: `e-${index}`,
           source: edge.source,
           target: edge.target,
-          label: edge.label,
           type: "smoothstep",
           animated: false,
-          style: { stroke: "#94a3b8", strokeWidth: 1.5 },
+          style: {
+            stroke: getRelationColor(edge.label),
+            strokeWidth: edge.label === "imports" ? 1.9 : 1.6,
+            opacity: 0.42,
+          },
         }));
 
-      const nodeById = new Map(canvasNodes.map((node) => [node.id, node]));
-      const components = buildComponents(canvasNodes, canvasEdges);
-      const layoutedComponents = components.map((component, index) => {
-        const componentNodes = component.ids
-          .map((id) => nodeById.get(id))
-          .filter(Boolean) as Node<FlowNodeData>[];
+      const layoutResult = layoutClusteredIslands(canvasNodes as Node<FlowNodeData>[], canvasEdges);
 
-        if (component.edges.length === 0) {
-          return layoutGrid(componentNodes);
-        }
-
-        const direction = index % 2 === 0 ? "TB" : "LR";
-        return layoutWithDagre(componentNodes, component.edges, direction);
-      });
-
-      const packedNodes = packComponents(
-        layoutedComponents.map((component) => ({
-          nodes: component.nodes,
-          width: component.width,
-          height: component.height,
-        }))
-      );
-
-      // If layout degenerates into a straight line (many nodes with nearly-equal y),
-      // fallback to a grid layout for better readability.
-      const yValues = packedNodes.map((n) => n.position.y);
-      const meanY = yValues.reduce((s, v) => s + v, 0) / Math.max(1, yValues.length);
-      const varianceY = yValues.reduce((s, v) => s + Math.pow(v - meanY, 2), 0) / Math.max(1, yValues.length);
-      const stddevY = Math.sqrt(varianceY);
-      if (packedNodes.length > 8 && stddevY < 6) {
-        // Large horizontal line detected — spread into a grid
-        const grid = layoutGrid(canvasNodes as Node<FlowNodeData>[]);
-        setNodes(grid.nodes);
-        setEdges(canvasEdges);
-
-        if (rfInstance) {
-          requestAnimationFrame(() => {
-            const preset = ZOOM_PRESETS[zoomMode];
-            rfInstance.fitView({
-              padding: preset.fitPadding,
-              duration: 500,
-              minZoom: preset.fitMinZoom,
-              maxZoom: preset.fitMaxZoom,
-            });
-          });
-        }
-
-        return;
-      }
-
-      setNodes(packedNodes);
+      setNodes(layoutResult.nodes);
       setEdges(canvasEdges);
 
       if (rfInstance) {
@@ -892,6 +1134,7 @@ export default function RepoLensDashboard() {
               <ReactFlow<Node<FlowNodeData>>
                 nodes={nodes}
                 edges={edges}
+                nodeTypes={NODE_TYPES}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={handleNodeClick}
@@ -903,15 +1146,20 @@ export default function RepoLensDashboard() {
                   minZoom: ZOOM_PRESETS[zoomMode].fitMinZoom,
                   maxZoom: ZOOM_PRESETS[zoomMode].fitMaxZoom,
                 }}
-                minZoom={0.2}
+                minZoom={0.05}
                 maxZoom={2}
-                zoomOnScroll={false}
-                zoomOnPinch={false}
+                zoomOnScroll={true}
+                zoomOnPinch={true}
                 zoomOnDoubleClick={false}
                 panOnScroll={false}
+                panOnDrag={true}
+                selectionOnDrag={false}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                onlyRenderVisibleElements={true}
                 className="w-full h-full bg-transparent"
               >
-                <Background color="#d1d9e0" variant={BackgroundVariant.Lines} gap={36} size={1} />
+                <Background color="#f1f5f9" variant={BackgroundVariant.Lines} gap={54} size={0.4} />
                 <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
               </ReactFlow>
 
