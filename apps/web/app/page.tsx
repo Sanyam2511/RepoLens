@@ -28,6 +28,9 @@ import Hero from "../components/Hero";
 import Features from "../components/Features";
 import Footer from "../components/Footer";
 import { NODE_TYPES, type GraphNodeData } from "../components/GraphNodes";
+import AnalyzerSummary from "../components/AnalyzerSummary";
+import type { SummaryMetricId } from "../lib/graph-summary";
+import HomeHistoryPreview from "../components/HomeHistoryPreview";
 
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 80;
@@ -124,6 +127,7 @@ const ZOOM_PRESETS = {
 } as const;
 
 type ZoomMode = keyof typeof ZOOM_PRESETS;
+type ViewMode = "overview" | "detail" | "summary";
 
 const FILTER_ITEMS: Array<{
   type: RepoNode["type"];
@@ -285,6 +289,27 @@ const formatClusterLabel = (key: string) => {
 const pickClusterColor = (key: string) => CLUSTER_COLORS[hashString(key) % CLUSTER_COLORS.length] ?? CLUSTER_COLORS[0];
 
 const getRelationColor = (label: string) => RELATION_COLORS[label] ?? "#94a3b8";
+
+const VIEW_TYPE_FILTERS: Record<ViewMode, Record<RepoNode["type"], boolean>> = {
+  overview: {
+    file: true,
+    "api-endpoint": false,
+    storage: false,
+    folder: true,
+  },
+  detail: {
+    file: true,
+    "api-endpoint": true,
+    storage: true,
+    folder: true,
+  },
+  summary: {
+    file: true,
+    "api-endpoint": true,
+    storage: true,
+    folder: true,
+  },
+};
 
 const getFileClusterKey = (filePath: string, repoRoot: string) => {
   const relativeSegments = splitPath(filePath).slice(splitPath(repoRoot).length);
@@ -573,6 +598,8 @@ export default function RepoLensDashboard() {
   const [statusTone, setStatusTone] = useState<StatusTone>("idle");
   const [progress, setProgress] = useState<JobProgress | null>(null);
   const [zoomMode, setZoomMode] = useState<ZoomMode>("detail");
+  const [viewMode, setViewMode] = useState<ViewMode>("detail");
+  const [summaryMetric, setSummaryMetric] = useState<SummaryMetricId>("coupling");
   const [graphData, setGraphData] = useState<RepoGraph | null>(null);
   const [selectedNode, setSelectedNode] = useState<FlowNodeData | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -591,10 +618,18 @@ export default function RepoLensDashboard() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const toggleFilter = useCallback((type: RepoNode["type"]) => {
+    setViewMode("detail");
     setTypeFilters((prev) => ({
       ...prev,
       [type]: !prev[type],
     }));
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode !== "summary") {
+      setTypeFilters(VIEW_TYPE_FILTERS[mode]);
+    }
   }, []);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node<FlowNodeData>) => {
@@ -610,27 +645,41 @@ export default function RepoLensDashboard() {
 
   const handleFitView = useCallback(() => {
     if (!rfInstance) return;
-    const preset = ZOOM_PRESETS[zoomMode];
+    handleViewModeChange("overview");
+    setDrawerOpen(false);
+    setSelectedNode(null);
+    setSelectedNodeId(null);
+    const preset = ZOOM_PRESETS.overview;
     rfInstance.fitView({
       padding: preset.fitPadding,
       duration: 500,
       minZoom: preset.fitMinZoom,
       maxZoom: preset.fitMaxZoom,
     });
-  }, [rfInstance, zoomMode]);
+  }, [handleViewModeChange, rfInstance]);
 
   const handleFocusSelected = useCallback(() => {
-    if (!rfInstance || !selectedNodeId) return;
-    const node = nodes.find((item) => item.id === selectedNodeId);
+    if (!rfInstance || nodes.length === 0) return;
+    const focusId = selectedNodeId ?? nodes.find((item) => item.type !== "clusterNode")?.id ?? nodes[0]?.id;
+    if (!focusId) return;
+
+    const node = nodes.find((item) => item.id === focusId);
     if (!node) return;
 
-    const preset = ZOOM_PRESETS[zoomMode];
+    if (!selectedNodeId) {
+      setSelectedNode(node.data);
+      setSelectedNodeId(node.id);
+    }
+
+    setDrawerOpen(true);
+
+    const preset = ZOOM_PRESETS.detail;
     rfInstance.setCenter(
       node.position.x + NODE_WIDTH / 2,
       node.position.y + NODE_HEIGHT / 2,
       { zoom: preset.focusZoom, duration: 400 }
     );
-  }, [nodes, rfInstance, selectedNodeId, zoomMode]);
+  }, [nodes, rfInstance, selectedNodeId]);
 
   const handleZoomIn = useCallback(() => {
     if (!rfInstance) return;
@@ -901,7 +950,9 @@ export default function RepoLensDashboard() {
         : "border-slate-200 bg-white/70 text-slate-600";
   const totalNodes = graphData?.nodes.length ?? 0;
   const totalEdges = graphData?.edges.length ?? 0;
-  const hasVisibleNodes = nodes.length > 0;
+  const visibleDataNodes = nodes.filter((node) => node.type !== "clusterNode");
+  const visibleDataNodeCount = visibleDataNodes.length;
+  const hasVisibleNodes = visibleDataNodeCount > 0;
   const legendCounts = graphData?.nodes.reduce(
     (acc, node) => {
       acc[node.type] = (acc[node.type] ?? 0) + 1;
@@ -933,6 +984,7 @@ export default function RepoLensDashboard() {
 
       <main className="relative z-10">
         <Hero />
+        <HomeHistoryPreview />
         <Features />
 
         <section className="mx-auto w-[min(1200px,94vw)] mt-16 section-wave section-wave-lifted overflow-x-clip px-6 py-10">
@@ -1035,9 +1087,9 @@ export default function RepoLensDashboard() {
                 <div className="rounded-full border border-slate-200 bg-slate-100 p-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                   <button
                     type="button"
-                    onClick={() => setZoomMode("overview")}
+                    onClick={() => handleViewModeChange("overview")}
                     className={`rounded-full px-2 py-1 transition ${
-                      zoomMode === "overview"
+                      viewMode === "overview"
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
@@ -1046,14 +1098,25 @@ export default function RepoLensDashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setZoomMode("detail")}
+                    onClick={() => handleViewModeChange("detail")}
                     className={`rounded-full px-2 py-1 transition ${
-                      zoomMode === "detail"
+                      viewMode === "detail"
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
                     Detail
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleViewModeChange("summary")}
+                    className={`rounded-full px-2 py-1 transition ${
+                      viewMode === "summary"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Summary
                   </button>
                 </div>
               </div>
@@ -1121,10 +1184,21 @@ export default function RepoLensDashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => setZoomMode(zoomMode === "detail" ? "overview" : "detail")}
+                onClick={() => handleViewModeChange(viewMode === "detail" ? "overview" : "detail")}
                 className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-600"
               >
-                {zoomMode === "detail" ? "Overview" : "Detail"}
+                {viewMode === "detail" ? "Overview" : "Detail"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("summary")}
+                className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
+                  viewMode === "summary"
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-600"
+                }`}
+              >
+                Summary
               </button>
             </div>
 
@@ -1147,7 +1221,12 @@ export default function RepoLensDashboard() {
           </div>
 
           <div className="mt-8 relative overflow-hidden rounded-[36px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
-            <div className="relative h-[560px] sm:h-[620px] lg:h-[720px]">
+            <div className={viewMode === "summary" ? "relative min-h-[860px] h-[calc(100vh-160px)]" : "relative h-[560px] sm:h-[620px] lg:h-[720px]"}>
+              {viewMode === "summary" ? (
+                <div className="absolute inset-0 p-1 sm:p-2">
+                  <AnalyzerSummary graphData={graphData} metric={summaryMetric} onMetricChange={setSummaryMetric} />
+                </div>
+              ) : null}
               <ReactFlow<Node<FlowNodeData>>
                 nodes={nodes}
                 edges={edges}
@@ -1174,18 +1253,19 @@ export default function RepoLensDashboard() {
                 nodesDraggable={false}
                 nodesConnectable={false}
                 onlyRenderVisibleElements={true}
-                className="w-full h-full bg-transparent"
+                className={viewMode === "summary" ? "hidden w-full h-full bg-transparent" : "w-full h-full bg-transparent"}
               >
                 <Background color="#f1f5f9" variant={BackgroundVariant.Lines} gap={54} size={0.4} />
                 <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
               </ReactFlow>
 
+              {viewMode !== "summary" ? (
               <div className="absolute top-4 right-4 hidden lg:block">
                 <div className="glass-panel rounded-2xl p-4 shadow-lg w-72">
                   <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-slate-500">
                     <span>Filters</span>
                     <span>
-                      {nodes.length}/{totalNodes}
+                      {visibleDataNodeCount}/{totalNodes}
                     </span>
                   </div>
                   <div className="mt-4 space-y-2">
@@ -1219,19 +1299,21 @@ export default function RepoLensDashboard() {
                     })}
                   </div>
                   <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-                    <span>Visible: {nodes.length}</span>
+                    <span>Visible: {visibleDataNodeCount}</span>
                     <span>
                       Edges: {edges.length}/{totalEdges}
                     </span>
                   </div>
                 </div>
               </div>
+              ) : null}
 
+              {viewMode !== "summary" ? (
               <div className="absolute bottom-4 right-4 hidden lg:block">
                 <div className="glass-panel rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-lg">
                   <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.3em] text-slate-500">
                     <span>Legend</span>
-                    <span>{hasVisibleNodes ? `${nodes.length} visible` : `${totalNodes} total`}</span>
+                    <span>{hasVisibleNodes ? `${visibleDataNodeCount} visible` : `${totalNodes} total`}</span>
                   </div>
                   <div className="mt-3 space-y-2">
                     {FILTER_ITEMS.map((item) => (
@@ -1250,8 +1332,9 @@ export default function RepoLensDashboard() {
                   </div>
                 </div>
               </div>
+              ) : null}
 
-              {!loading && !hasVisibleNodes && (
+              {viewMode !== "summary" && !loading && !hasVisibleNodes && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="glass-panel rounded-2xl px-6 py-4 text-sm text-slate-600">
                     {graphData
@@ -1261,6 +1344,7 @@ export default function RepoLensDashboard() {
                 </div>
               )}
 
+              {viewMode !== "summary" ? (
               <div
                 className={`absolute inset-y-0 right-0 z-20 w-full max-w-lg transform transition-transform duration-300 ${
                   drawerOpen ? "translate-x-0" : "translate-x-full"
@@ -1317,6 +1401,7 @@ export default function RepoLensDashboard() {
                   </div>
                 </div>
               </div>
+              ) : null}
             </div>
           </div>
         </section>
