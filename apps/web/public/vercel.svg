@@ -1,1 +1,12 @@
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="verTitle verDesc">
+	<title id="verTitle">Deployment badge</title>
+	<desc id="verDesc">Simplified triangular deployment badge</desc>
+	<style>
+	  .badge-tilt{ transform-origin:32px 32px; animation:tilt 6s linear infinite }
+	  @keyframes tilt{0%{transform:rotate(0)}50%{transform:rotate(2deg)}100%{transform:rotate(0)}}
+	</style>
+	<rect x="2" y="2" width="60" height="60" rx="10" fill="#fbfdff" stroke="#e6eef8" />
+	<g class="badge-tilt">
+	  <polygon points="32,6 58,54 6,54" fill="#fff" stroke="#94a3b8" stroke-width="1.2" />
+	</g>
+</svg>

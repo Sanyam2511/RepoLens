@@ -58,18 +58,38 @@ export default function Hero() {
           <div className="relative w-full max-w-md">
             <div className="rounded-[38px] bg-white p-6 shadow-[0_26px_60px_rgba(15,23,42,0.16)]">
               <div className="h-[360px] rounded-[30px] bg-gradient-to-br from-sky-50 via-white to-amber-50 flex items-center justify-center">
-              <svg width="320" height="260" viewBox="0 0 320 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="320" height="260" viewBox="0 0 320 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="heroTitle heroDesc">
+                <title id="heroTitle">Repository map (static)</title>
+                <desc id="heroDesc">Static illustration of module groups with clear import connections</desc>
                 <rect width="320" height="260" rx="24" fill="#F8FAFC" />
-                <rect x="24" y="32" width="120" height="90" rx="16" fill="#E0F2FE" />
-                <rect x="160" y="32" width="136" height="60" rx="16" fill="#FFE4B5" />
-                <rect x="160" y="106" width="120" height="90" rx="18" fill="#DCFCE7" />
-                <rect x="24" y="136" width="120" height="60" rx="16" fill="#E0E7FF" />
-                <path d="M78 122 L178 106" stroke="#94A3B8" strokeWidth="3" />
-                <path d="M110 166 L200 136" stroke="#94A3B8" strokeWidth="3" />
-                <path d="M86 88 L220 80" stroke="#94A3B8" strokeWidth="3" />
-                <circle cx="82" cy="124" r="6" fill="#0EA5E9" />
-                <circle cx="182" cy="106" r="6" fill="#F59E0B" />
-                <circle cx="114" cy="168" r="6" fill="#22C55E" />
+                <rect x="12" y="18" width="296" height="224" rx="20" fill="#FFFFFF" opacity="0.8" />
+
+                {/* Module cards (static) */}
+                <rect x="36" y="36" width="116" height="68" rx="12" fill="#E0F2FE" />
+                <text x="94" y="58" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">Core</text>
+
+                <rect x="168" y="36" width="116" height="48" rx="12" fill="#FFE8B5" />
+                <text x="226" y="52" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">API</text>
+
+                <rect x="36" y="132" width="116" height="56" rx="12" fill="#E0E7FF" />
+                <text x="94" y="156" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">Utils</text>
+
+                <rect x="168" y="118" width="116" height="84" rx="12" fill="#DCFCE7" />
+                <text x="226" y="156" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">Services</text>
+
+                {/* Static connections between module centers */}
+                <path d="M94 70 C140 70 180 62 226 60" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.95" />
+                <path d="M94 160 C140 160 180 160 226 160" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.95" />
+                <path d="M94 136 C130 136 180 148 226 160" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.9" />
+
+                {/* Endpoint markers (static) */}
+                <circle cx="94" cy="70" r="6" fill="#0EA5E9" stroke="#FFFFFF" strokeWidth="1" />
+                <circle cx="226" cy="60" r="6" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="1" />
+                <circle cx="94" cy="160" r="6" fill="#22C55E" stroke="#FFFFFF" strokeWidth="1" />
+                <circle cx="226" cy="160" r="6" fill="#A78BFA" stroke="#FFFFFF" strokeWidth="1" />
+
+                {/* subtle inner highlight for depth */}
+                <rect x="28" y="28" width="264" height="204" rx="16" fill="none" stroke="#EEF2FF" strokeWidth="1" opacity="0.6" />
               </svg>
             </div>
           </div>
