@@ -37,7 +37,7 @@ const normalizeGithubRepoUrl = (input: string): string | null => {
         const repo = repoPart.replace(/\.git$/i, '');
         if (!repo) return null;
 
-        return `https://github.com/${owner}/${repo}`;
+        return `https://github.com/${owner.toLowerCase()}/${repo.toLowerCase()}`;
     } catch {
         return null;
     }

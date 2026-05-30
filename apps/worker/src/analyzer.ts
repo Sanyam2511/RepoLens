@@ -381,20 +381,43 @@ const resolveNonRelativeModule = (
     repoPath: string,
     index: ReturnType<typeof buildFileIndex>
 ): string | null => {
-    // Try to match against relativeMap keys first (segments within repo)
+    const normalizedSpecifier = moduleSpecifier.replace(/^@\//, "").replace(/^~\//, "");
+
+    const tryWorkspacePackageRoots = (specifier: string): string | null => {
+        const roots = [
+            path.join(repoPath, specifier),
+            path.join(repoPath, "packages", specifier),
+            path.join(repoPath, "apps", specifier),
+            path.join(repoPath, "src", specifier),
+        ];
+
+        for (const root of roots) {
+            const resolved = resolvePathCandidates(root, ALL_EXTENSIONS, index.fileSet, ["index", "types", "main"]);
+            if (resolved) return resolved;
+
+            const packageJsonPath = path.join(root, "package.json");
+            if (index.fileSet.has(packageJsonPath)) {
+                const packageEntry = resolvePathCandidates(root, ALL_EXTENSIONS, index.fileSet, ["index", "types", "main"]);
+                if (packageEntry) return packageEntry;
+            }
+        }
+
+        return null;
+    };
+
+    const workspaceAliasMatch = tryWorkspacePackageRoots(normalizedSpecifier);
+    if (workspaceAliasMatch) return workspaceAliasMatch;
+
     const keys = Array.from(index.relativeMap.keys());
-    // Direct match or ending match
     for (const rel of keys) {
-        if (rel === moduleSpecifier) return index.relativeMap.get(rel) ?? null;
-        if (rel.endsWith(`/${moduleSpecifier}`)) return index.relativeMap.get(rel) ?? null;
-        // with extension
-        const withJs = `${moduleSpecifier}.js`;
-        const withTs = `${moduleSpecifier}.ts`;
+        if (rel === normalizedSpecifier) return index.relativeMap.get(rel) ?? null;
+        if (rel.endsWith(`/${normalizedSpecifier}`)) return index.relativeMap.get(rel) ?? null;
+        const withJs = `${normalizedSpecifier}.js`;
+        const withTs = `${normalizedSpecifier}.ts`;
         if (rel.endsWith(`/${withJs}`) || rel.endsWith(`/${withTs}`)) return index.relativeMap.get(rel) ?? null;
     }
 
-    // Fallback: match by base name
-    const last = moduleSpecifier.split('/').pop() ?? moduleSpecifier;
+    const last = normalizedSpecifier.split('/').pop() ?? normalizedSpecifier;
     const matches = index.baseNameMap.get(last);
     if (matches && matches.length > 0) {
         return matches[0] ?? null;
@@ -795,6 +818,29 @@ const resolveRelativeSourceFile = (
     return null;
 };
 
+const findNpmDependencies = (allFiles: string[]): Set<string> => {
+    const deps = new Set<string>();
+    const packageJsons = allFiles.filter(f => f.endsWith('package.json'));
+    
+    for (const pkgPath of packageJsons) {
+        try {
+            const content = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            if (content.dependencies) Object.keys(content.dependencies).forEach(d => deps.add(d));
+            if (content.devDependencies) Object.keys(content.devDependencies).forEach(d => deps.add(d));
+        } catch {}
+    }
+    return deps;
+};
+
+const determinePackageRoot = (filePath: string, repoPath: string) => {
+    const rel = getRelativePath(repoPath, filePath);
+    const segments = rel.split('/');
+    if (segments[0] === 'apps' || segments[0] === 'packages' || segments[0] === 'workspaces') {
+        return segments.length > 1 ? `${segments[0]}/${segments[1]}` : null;
+    }
+    return null;
+};
+
 export const analyzeRepo = async (
     repoPath: string,
     onProgress?: ProgressReporter
@@ -815,26 +861,14 @@ export const analyzeRepo = async (
     let allFiles = allFilesFull;
     const totalFiles = allFilesFull.length;
 
-    // If repo is very large, apply heuristic: skip noisy dirs and prioritize source folders,
-    // then cap the number of files analyzed. This keeps analysis usable for massive repos.
     if (totalFiles > LARGE_REPO_FILE_THRESHOLD) {
         await reportProgress({ phase: "cataloging", percent: 5, detail: `Large repository detected (${totalFiles} files). Applying heuristics...` });
 
-        // Prefer files in priority directories first
         const priorityMatches: string[] = [];
         const otherMatches: string[] = [];
 
         for (const fp of allFilesFull) {
             const lower = fp.toLowerCase();
-            let skipped = false;
-            for (const skip of LARGE_REPO_SKIP_DIRS) {
-                if (lower.includes(`/${skip}/`) || lower.endsWith(`/${skip}`)) {
-                    skipped = true;
-                    break;
-                }
-            }
-            if (skipped) continue;
-
             let prioritized = false;
             for (const dir of LARGE_REPO_PRIORITY_DIRS) {
                 if (lower.includes(`/${dir}/`) || lower.startsWith(`${dir}/`)) {
@@ -861,7 +895,6 @@ export const analyzeRepo = async (
         pushUntilCap(priorityMatches);
         if (chosen.length < LARGE_REPO_CAP) pushUntilCap(otherMatches);
 
-        // If chosen is still empty (edge-case), fallback to first N files
         if (chosen.length === 0) {
             allFiles = allFilesFull.slice(0, LARGE_REPO_CAP);
         } else {
@@ -870,9 +903,11 @@ export const analyzeRepo = async (
 
         await reportProgress({ phase: "cataloging", percent: 10, detail: `Selected ${allFiles.length}/${totalFiles} files for analysis` });
     }
+    
     const fileIndex = buildFileIndex(repoPath, allFiles);
     const goModulePath = readGoModulePath(repoPath);
     const dartPackageName = readDartPackageName(repoPath);
+    const knownNpmDeps = findNpmDependencies(allFilesFull);
 
     await reportProgress({
         phase: "indexing",
@@ -912,10 +947,13 @@ export const analyzeRepo = async (
         const filePath = sourceFile.getFilePath();
         if (!filePath) return;
         const snippet = buildCodeSnippet(sourceFile);
+        
+        const pkgRoot = determinePackageRoot(filePath, repoPath);
         const node: RepoNode = {
             id: filePath,
             label: sourceFile.getBaseName(),
-            type: "file"
+            type: "file",
+            ...(pkgRoot ? { packageRoot: pkgRoot } : {})
         };
 
         if (snippet !== undefined) {
@@ -930,10 +968,13 @@ export const analyzeRepo = async (
         const filePath = allFiles[i];
         if (!filePath) continue;
         const snippet = readFileSnippet(filePath);
+        
+        const pkgRoot = determinePackageRoot(filePath, repoPath);
         const node: RepoNode = {
             id: filePath,
             label: path.basename(filePath),
-            type: "file"
+            type: "file",
+            ...(pkgRoot ? { packageRoot: pkgRoot } : {})
         };
 
         if (snippet !== undefined) {
@@ -990,7 +1031,26 @@ export const analyzeRepo = async (
                 }
             }
 
-            if (!targetSourceFile) return;
+            if (!targetSourceFile) {
+                const baseModule = moduleSpecifier.split('/')[0];
+                if (baseModule && knownNpmDeps.has(baseModule)) {
+                    const npmNodeId = `npm:${baseModule}`;
+                    addNode({
+                        id: npmNodeId,
+                        label: baseModule,
+                        type: "npm-package",
+                        packageRoot: "npm-dependencies"
+                    });
+                    
+                    tsEdgeCount++;
+                    addEdge({
+                        source: filePath,
+                        target: npmNodeId,
+                        label: "imports"
+                    });
+                }
+                return;
+            }
 
             const targetPath = targetSourceFile.getFilePath();
             if (!targetPath || targetPath === filePath) return;
@@ -1023,7 +1083,26 @@ export const analyzeRepo = async (
                     }
                 }
 
-                if (!targetSourceFile) return;
+                if (!targetSourceFile) {
+                    const baseModule = moduleSpecifier.split('/')[0];
+                    if (baseModule && knownNpmDeps.has(baseModule)) {
+                        const npmNodeId = `npm:${baseModule}`;
+                        addNode({
+                            id: npmNodeId,
+                            label: baseModule,
+                            type: "npm-package",
+                            packageRoot: "npm-dependencies"
+                        });
+                        
+                        tsEdgeCount++;
+                        addEdge({
+                            source: filePath,
+                            target: npmNodeId,
+                            label: "imports"
+                        });
+                    }
+                    return;
+                }
 
                 const targetPath = targetSourceFile.getFilePath();
                 if (!targetPath || targetPath === filePath) return;
@@ -1085,7 +1164,6 @@ export const analyzeRepo = async (
 
     const jsTsExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
-    // Fallback scan for JS/TS files using regex to extract imports/requires when ts-morph doesn't capture sources.
     const jsFiles = allFiles.filter((filePath) => {
         if (!filePath) return false;
         const ext = path.extname(filePath).toLowerCase();
@@ -1121,7 +1199,15 @@ export const analyzeRepo = async (
                 target = resolveNonRelativeModule(moduleSpecifier, filePath, repoPath, fileIndex);
             }
 
-            if (!target || target === filePath) continue;
+            if (!target || target === filePath) {
+                const baseModule = moduleSpecifier.split('/')[0];
+                if (baseModule && knownNpmDeps.has(baseModule)) {
+                     const npmNodeId = `npm:${baseModule}`;
+                     addNode({ id: npmNodeId, label: baseModule, type: "npm-package", packageRoot: "npm-dependencies" });
+                     addEdge({ source: filePath, target: npmNodeId, label: 'imports' });
+                }
+                continue;
+            }
             addEdge({ source: filePath, target, label: 'imports' });
         }
 
@@ -1138,7 +1224,15 @@ export const analyzeRepo = async (
                 target = resolveNonRelativeModule(moduleSpecifier, filePath, repoPath, fileIndex);
             }
 
-            if (!target || target === filePath) continue;
+            if (!target || target === filePath) {
+                const baseModule = moduleSpecifier.split('/')[0];
+                if (baseModule && knownNpmDeps.has(baseModule)) {
+                     const npmNodeId = `npm:${baseModule}`;
+                     addNode({ id: npmNodeId, label: baseModule, type: "npm-package", packageRoot: "npm-dependencies" });
+                     addEdge({ source: filePath, target: npmNodeId, label: 'imports' });
+                }
+                continue;
+            }
             addEdge({ source: filePath, target, label: 'imports' });
         }
 
