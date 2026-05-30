@@ -1,14 +1,18 @@
 export interface RepoNode {
     id: string;
     label: string;
-    type: 'file' | 'api-endpoint' | 'storage' | 'folder';
+    type: 'file' | 'api-endpoint' | 'storage' | 'folder' | 'npm-package';
     codeSnippet?: string;
+    packageRoot?: string; 
 }
 
 export interface RepoEdge {
     source: string;
     target: string;
     label: string;
+    data?: {
+        direct?: boolean;
+    };
 }
 
 export interface RepoGraph {

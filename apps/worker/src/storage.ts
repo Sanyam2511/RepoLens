@@ -4,10 +4,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 const prisma = new PrismaClient();
+const ANALYSIS_CACHE_VERSION = 2;
 const LOCAL_HISTORY_PATH = path.join(
   process.env.REPOLENS_TEMP_DIR || path.join(process.cwd(), "temp"),
   "analysis-history.json"
 );
+
+const getCachedGraphVersion = (graph: RepoGraph | null): number | null => {
+  if (!graph) return null;
+  const meta = (graph as unknown as RepoGraph & { meta?: { cacheVersion?: number } }).meta;
+  return typeof meta?.cacheVersion === "number" ? meta.cacheVersion : null;
+};
 
 const readLocalHistory = (): AnalysisHistoryRecord[] => {
   try {
@@ -55,7 +62,12 @@ export const getCachedGraph = async (repoUrl: string): Promise<RepoGraph | null>
       return null;
     }
 
-    return record.graphJson as RepoGraph;
+    const graph = record.graphJson as unknown as RepoGraph;
+    if (getCachedGraphVersion(graph) !== ANALYSIS_CACHE_VERSION) {
+      return null;
+    }
+
+    return graph;
   } catch {
     const localRecord = readLocalHistory().find((item) => item.repoUrl === repoUrl);
     if (!localRecord) {
@@ -63,6 +75,10 @@ export const getCachedGraph = async (repoUrl: string): Promise<RepoGraph | null>
     }
 
     if (localRecord.edgeCount === 0 && localRecord.nodeCount > 1) {
+      return null;
+    }
+
+    if (getCachedGraphVersion(localRecord.graphJson) !== ANALYSIS_CACHE_VERSION) {
       return null;
     }
 
@@ -76,10 +92,15 @@ export const saveAnalysis = async (
   commitSha?: string | null,
   userId: string | null = null
 ) => {
+  const graphWithMeta = {
+    ...graph,
+    meta: { cacheVersion: ANALYSIS_CACHE_VERSION },
+  };
+
   const payload = {
     repoUrl,
     commitSha: commitSha ?? null,
-    graphJson: graph as Prisma.InputJsonValue,
+    graphJson: graphWithMeta as unknown as Prisma.InputJsonValue,
     nodeCount: graph.nodes.length,
     edgeCount: graph.edges.length,
   };
@@ -98,7 +119,7 @@ export const saveAnalysis = async (
       commitSha: result.commitSha,
       nodeCount: result.nodeCount,
       edgeCount: result.edgeCount,
-      graphJson: graph,
+      graphJson: graphWithMeta as unknown as RepoGraph,
       createdAt: result.createdAt.toISOString(),
       updatedAt: result.updatedAt.toISOString(),
     });
@@ -114,7 +135,7 @@ export const saveAnalysis = async (
       commitSha: commitSha ?? null,
       nodeCount: graph.nodes.length,
       edgeCount: graph.edges.length,
-      graphJson: graph,
+      graphJson: graphWithMeta as unknown as RepoGraph,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -134,18 +155,23 @@ export const listAnalysisHistory = async (limit?: number, userId?: string | null
   }
 
   try {
-    const records = await prisma.repoAnalysis.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: typeof limit === "number" && limit > 0 ? limit : undefined,
-    });
+    const records = typeof limit === "number" && limit > 0
+      ? await prisma.repoAnalysis.findMany({
+          orderBy: { updatedAt: "desc" },
+          take: limit,
+        })
+      : await prisma.repoAnalysis.findMany({
+          orderBy: { updatedAt: "desc" },
+        });
 
     return records.map((record) => ({
       id: record.id,
+      userId: null,
       repoUrl: record.repoUrl,
       commitSha: record.commitSha,
       nodeCount: record.nodeCount,
       edgeCount: record.edgeCount,
-      graphJson: record.graphJson as RepoGraph,
+      graphJson: record.graphJson as unknown as RepoGraph,
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
     }));
@@ -173,11 +199,12 @@ export const getAnalysisHistoryById = async (id: string, userId?: string | null)
 
     return {
       id: record.id,
+      userId: null,
       repoUrl: record.repoUrl,
       commitSha: record.commitSha,
       nodeCount: record.nodeCount,
       edgeCount: record.edgeCount,
-      graphJson: record.graphJson as RepoGraph,
+      graphJson: record.graphJson as unknown as RepoGraph,
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
     };
