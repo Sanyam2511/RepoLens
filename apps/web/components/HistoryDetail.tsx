@@ -99,24 +99,28 @@ export default function HistoryDetail({ id, onClose }: { id: string; onClose: ()
 
           <div className="rounded-2xl border border-slate-200 p-3">
             <div className="text-xs text-slate-500">Clusters</div>
-            <div className="mt-2 text-sm text-slate-800">{summary.clusterCount} clusters</div>
+            <div className="mt-2 text-sm text-slate-800">{summary ? `${summary.clusterCount} clusters` : "—"}</div>
           </div>
         </div>
 
         <div className="mt-4 grid gap-3">
           <div className="text-sm font-semibold text-slate-900">Metric breakdown</div>
           <div className="grid gap-2">
-            {Object.values(summary.metrics).map((m) => (
-              <div key={m.id} className="grid gap-1.5">
-                <div className="flex items-center justify-between text-xs text-slate-600">
-                  <span>{m.label}</span>
-                  <span className="font-semibold text-slate-900">{m.score}/100</span>
+            {summary ? (
+              Object.values(summary.metrics).map((m) => (
+                <div key={m.id} className="grid gap-1.5">
+                  <div className="flex items-center justify-between text-xs text-slate-600">
+                    <span>{m.label}</span>
+                    <span className="font-semibold text-slate-900">{m.score}/100</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div className="h-full rounded-full" style={{ width: `${m.score}%`, background: m.accent }} />
+                  </div>
                 </div>
-                <div className="h-2 rounded-full bg-slate-100">
-                  <div className="h-full rounded-full" style={{ width: `${m.score}%`, background: m.accent }} />
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <div className="text-sm text-slate-600">No metric data available</div>
+            )}
           </div>
         </div>
       </div>

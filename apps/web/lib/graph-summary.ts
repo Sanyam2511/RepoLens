@@ -26,6 +26,7 @@ export type ClusterSummary = {
   apiCount: number;
   storageCount: number;
   folderCount: number;
+  npmCount: number; // <-- Added
   internalEdges: number;
   externalEdges: number;
   importEdges: number;
@@ -42,6 +43,7 @@ export type GraphSummary = {
   apiCount: number;
   storageCount: number;
   folderCount: number;
+  npmCount: number; // <-- Added
   importEdges: number;
   crossClusterImports: number;
   internalImports: number;
@@ -129,6 +131,7 @@ const getFallbackClusterKey = (node: RepoNode) => {
   if (node.type === "api-endpoint") return "external services";
   if (node.type === "storage") return "data layer";
   if (node.type === "folder") return "shared nodes";
+  if (node.type === "npm-package") return "npm dependencies"; // <-- Catch NPMs here
   return "shared nodes";
 };
 
@@ -147,6 +150,7 @@ const formatClusterLabel = (key: string) => {
   if (key === "shared nodes") return "Shared nodes";
   if (key === "external services") return "External services";
   if (key === "data layer") return "Data layer";
+  if (key === "npm dependencies") return "NPM Packages"; // <-- Formatter for NPMs
 
   return key
     .split("/")
@@ -185,11 +189,13 @@ const metricBadge = (score: number, direction: "higher-is-better" | "higher-is-w
 const computeMetricScore = (value: number, scale: number) => clamp((value / Math.max(1, scale)) * 100);
 
 export const summarizeRepoGraph = (graph: RepoGraph): GraphSummary => {
+  // Added "npm-package" to fix TS(2741)
   const counts: Record<RepoNode["type"], number> = {
     file: 0,
     "api-endpoint": 0,
     storage: 0,
     folder: 0,
+    "npm-package": 0, 
   };
 
   const degreeMap = new Map<string, number>();
@@ -312,6 +318,8 @@ export const summarizeRepoGraph = (graph: RepoGraph): GraphSummary => {
       const apiCount = cluster.nodes.filter((node) => node.type === "api-endpoint").length;
       const storageCount = cluster.nodes.filter((node) => node.type === "storage").length;
       const folderCount = cluster.nodes.filter((node) => node.type === "folder").length;
+      const npmCount = cluster.nodes.filter((node) => node.type === "npm-package").length; // <-- Added
+
       const couplingScore = totalImportEdges === 0 ? 0 : clamp((cluster.externalEdges / Math.max(1, cluster.importEdges + cluster.externalEdges)) * 100);
       const cohesionScore = totalImportEdges === 0 ? 100 : clamp((cluster.internalEdges / Math.max(1, cluster.internalEdges + cluster.externalEdges)) * 100);
       const riskScore = clamp(couplingScore * 0.45 + (100 - cohesionScore) * 0.25 + computeMetricScore(apiCount + storageCount, Math.max(1, fileCount)) * 0.3);
@@ -325,6 +333,7 @@ export const summarizeRepoGraph = (graph: RepoGraph): GraphSummary => {
         apiCount,
         storageCount,
         folderCount,
+        npmCount, // <-- Passed to return object
         internalEdges: cluster.internalEdges,
         externalEdges: cluster.externalEdges,
         importEdges: cluster.importEdges,
@@ -446,6 +455,7 @@ export const summarizeRepoGraph = (graph: RepoGraph): GraphSummary => {
     apiCount: counts["api-endpoint"],
     storageCount: counts.storage,
     folderCount: counts.folder,
+    npmCount: counts["npm-package"], // <-- Passed to return object
     importEdges: totalImportEdges,
     crossClusterImports,
     internalImports,
