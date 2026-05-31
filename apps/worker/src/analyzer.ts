@@ -66,17 +66,29 @@ const IGNORED_DIRS = new Set([
     "temp"
 ]);
 
+const IGNORED_EXTS = new Set([
+    ".svg", ".ico", ".png", ".jpg", ".jpeg", ".css", ".scss", 
+    ".md", ".mdx", ".sql", ".toml", ".prisma", ".lock", 
+    ".yml", ".yaml", ".txt", ".woff", ".woff2", ".ttf", ".eot", ".json"
+]);
+
+// Removed tsconfig files so ts-morph uses them for alias resolution
+const IGNORED_FILES = new Set([
+    ".gitignore", ".env", ".env.example", ".env.local",
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "eslint.config.mjs", "eslint.config.js", "postcss.config.mjs", "postcss.config.js",
+    "tailwind.config.ts", "tailwind.config.js", "next.config.ts", "next.config.js",
+    "vitest.config.ts", "jest.config.ts"
+]);
+
 const buildSnippetFromText = (text: string): string | undefined => {
     const trimmed = text.trim();
     if (!trimmed) return undefined;
-
     const lines = trimmed.split(/\r?\n/).slice(0, MAX_SNIPPET_LINES);
     let snippet = lines.join("\n");
-
     if (snippet.length > MAX_SNIPPET_CHARS) {
         snippet = `${snippet.slice(0, MAX_SNIPPET_CHARS)}\n...`;
     }
-
     return snippet;
 };
 
@@ -91,12 +103,9 @@ const readFileSnippet = (filePath: string): string | undefined => {
         const buffer = Buffer.alloc(MAX_SNIPPET_BYTES);
         const bytesRead = fs.readSync(fd, buffer, 0, MAX_SNIPPET_BYTES, 0);
         fs.closeSync(fd);
-
         if (bytesRead <= 0) return undefined;
-
         const slice = buffer.subarray(0, bytesRead);
         if (slice.includes(0)) return undefined;
-
         return buildSnippetFromText(slice.toString("utf8"));
     } catch {
         return undefined;
@@ -109,12 +118,9 @@ const readFileText = (filePath: string): string | null => {
         const buffer = Buffer.alloc(MAX_PARSE_BYTES);
         const bytesRead = fs.readSync(fd, buffer, 0, MAX_PARSE_BYTES, 0);
         fs.closeSync(fd);
-
         if (bytesRead <= 0) return null;
-
         const slice = buffer.subarray(0, bytesRead);
         if (slice.includes(0)) return null;
-
         return slice.toString("utf8");
     } catch {
         return null;
@@ -124,64 +130,40 @@ const readFileText = (filePath: string): string | null => {
 const isIgnoredPath = (filePath: string) =>
     filePath.split(path.sep).some((segment) => IGNORED_DIRS.has(segment));
 
+const isIgnoredFile = (filePath: string) => {
+    const fileName = path.basename(filePath).toLowerCase();
+    if (fileName === "package.json" || fileName === "tsconfig.json" || fileName === "tsconfig.node.json") return false; 
+    if (IGNORED_FILES.has(fileName)) return true;
+    const ext = path.extname(filePath).toLowerCase();
+    if (IGNORED_EXTS.has(ext)) return true;
+    return false;
+};
+
 const walkFiles = (rootDir: string, collected: string[] = []): string[] => {
     const entries = fs.readdirSync(rootDir, { withFileTypes: true });
-
     for (const entry of entries) {
         if (entry.isDirectory() && IGNORED_DIRS.has(entry.name)) {
             continue;
         }
-
         const fullPath = path.join(rootDir, entry.name);
-
         if (entry.isDirectory()) {
             walkFiles(fullPath, collected);
             continue;
         }
-
-        if (entry.isFile()) {
+        if (entry.isFile() && !isIgnoredFile(fullPath)) {
             collected.push(fullPath);
         }
     }
-
     return collected;
 };
 
 type DependencyRef = {
     value: string;
     label: "imports" | "includes" | "requires" | "sources" | "uses";
-    kind:
-        | "relative"
-        | "python"
-        | "go"
-        | "rust-mod"
-        | "rust-use"
-        | "java"
-        | "kotlin"
-        | "csharp"
-        | "dart"
-        | "lua"
-        | "ruby"
-        | "php"
-        | "swift"
-        | "c-include"
-        | "shell";
+    kind: "relative" | "python" | "go" | "rust-mod" | "rust-use" | "java" | "kotlin" | "csharp" | "dart" | "lua" | "ruby" | "php" | "swift" | "c-include" | "shell";
 };
 
-type ExtensionKind =
-    | "python"
-    | "go"
-    | "rust"
-    | "java"
-    | "kotlin"
-    | "csharp"
-    | "c"
-    | "ruby"
-    | "php"
-    | "dart"
-    | "lua"
-    | "swift"
-    | "shell";
+type ExtensionKind = "python" | "go" | "rust" | "java" | "kotlin" | "csharp" | "c" | "ruby" | "php" | "dart" | "lua" | "swift" | "shell";
 
 const EXTENSIONS_BY_KIND: Record<ExtensionKind, string[]> = {
     python: [".py"],
@@ -199,9 +181,7 @@ const EXTENSIONS_BY_KIND: Record<ExtensionKind, string[]> = {
     shell: [".sh", ".bash", ".zsh"],
 };
 
-const ALL_EXTENSIONS = Array.from(
-    new Set(Object.values(EXTENSIONS_BY_KIND).flat())
-);
+const ALL_EXTENSIONS = Array.from(new Set(Object.values(EXTENSIONS_BY_KIND).flat()));
 
 const toPosixPath = (value: string) => value.split(path.sep).join("/");
 
@@ -216,20 +196,20 @@ const buildFileIndex = (rootDir: string, files: string[]) => {
 
     files.forEach((filePath) => {
         const normalized = path.resolve(filePath);
-        fileSet.add(normalized);
+        fileSet.add(toPosixPath(normalized));
 
         const relative = getRelativePath(rootDir, normalized);
-        relativeMap.set(relative, normalized);
+        relativeMap.set(relative, toPosixPath(normalized));
 
         const baseName = path.parse(normalized).name;
         const list = baseNameMap.get(baseName) ?? [];
-        list.push(normalized);
+        list.push(toPosixPath(normalized));
         baseNameMap.set(baseName, list);
 
         if (path.extname(normalized).toLowerCase() === ".go") {
             const relDir = toPosixPath(path.dirname(relative));
             if (!goPackageMap.has(relDir)) {
-                goPackageMap.set(relDir, normalized);
+                goPackageMap.set(relDir, toPosixPath(normalized));
             }
         }
     });
@@ -243,7 +223,7 @@ const resolvePathCandidates = (
     fileSet: Set<string>,
     indexNames: string[] = ["index"]
 ): string | null => {
-    const normalized = path.resolve(basePath);
+    const normalized = toPosixPath(path.resolve(basePath));
     if (path.extname(normalized)) {
         return fileSet.has(normalized) ? normalized : null;
     }
@@ -255,7 +235,7 @@ const resolvePathCandidates = (
 
     for (const ext of extensions) {
         for (const indexName of indexNames) {
-            const candidate = path.join(normalized, `${indexName}${ext}`);
+            const candidate = toPosixPath(path.join(normalized, `${indexName}${ext}`));
             if (fileSet.has(candidate)) return candidate;
         }
     }
@@ -263,49 +243,30 @@ const resolvePathCandidates = (
     return null;
 };
 
-const resolvePythonModule = (
-    value: string,
-    fromFilePath: string,
-    repoPath: string,
-    fileSet: Set<string>
-): string | null => {
+const resolvePythonModule = (value: string, fromFilePath: string, repoPath: string, fileSet: Set<string>): string | null => {
     let moduleValue = value.trim();
     if (!moduleValue) return null;
-
     const leadingDots = moduleValue.match(/^\.+/)?.[0].length ?? 0;
     moduleValue = moduleValue.slice(leadingDots);
-
     let baseDir = path.dirname(fromFilePath);
     for (let i = 1; i < leadingDots; i += 1) {
         baseDir = path.dirname(baseDir);
     }
-
     const modulePath = moduleValue ? moduleValue.replace(/\./g, path.sep) : "";
     const candidateBase = modulePath ? path.join(baseDir, modulePath) : baseDir;
-
-    const resolvedRelative = resolvePathCandidates(
-        candidateBase,
-        EXTENSIONS_BY_KIND.python,
-        fileSet,
-        ["__init__", "index"]
-    );
+    const resolvedRelative = resolvePathCandidates(candidateBase, EXTENSIONS_BY_KIND.python, fileSet, ["__init__", "index"]);
     if (resolvedRelative) return resolvedRelative;
-
     if (leadingDots === 0) {
         const repoBase = path.join(repoPath, modulePath);
         return resolvePathCandidates(repoBase, EXTENSIONS_BY_KIND.python, fileSet, ["__init__", "index"]);
     }
-
     return null;
 };
 
 const findRustCrateRoot = (filePath: string, repoPath: string) => {
     const parts = path.normalize(filePath).split(path.sep);
     const srcIndex = parts.lastIndexOf("src");
-    if (srcIndex >= 0) {
-        return parts.slice(0, srcIndex + 1).join(path.sep);
-    }
-
+    if (srcIndex >= 0) return parts.slice(0, srcIndex + 1).join(path.sep);
     return repoPath;
 };
 
@@ -315,37 +276,26 @@ const resolveRustMod = (value: string, fromFilePath: string, fileSet: Set<string
     return resolvePathCandidates(basePath, EXTENSIONS_BY_KIND.rust, fileSet, ["mod"]);
 };
 
-const resolveRustUse = (
-    value: string,
-    fromFilePath: string,
-    repoPath: string,
-    fileSet: Set<string>
-): string | null => {
+const resolveRustUse = (value: string, fromFilePath: string, repoPath: string, fileSet: Set<string>): string | null => {
     let segments = value.split("::").filter(Boolean);
     if (segments.length === 0) return null;
-
     let baseDir = findRustCrateRoot(fromFilePath, repoPath);
-
     while (segments[0] === "super") {
         baseDir = path.dirname(baseDir);
         segments = segments.slice(1);
     }
-
     if (segments[0] === "self") {
         baseDir = path.dirname(fromFilePath);
         segments = segments.slice(1);
     }
-
     if (segments[0] === "crate") {
         segments = segments.slice(1);
     }
-
     for (let i = segments.length; i >= 1; i -= 1) {
         const basePath = path.join(baseDir, ...segments.slice(0, i));
         const resolved = resolvePathCandidates(basePath, EXTENSIONS_BY_KIND.rust, fileSet, ["mod"]);
         if (resolved) return resolved;
     }
-
     return null;
 };
 
@@ -355,11 +305,8 @@ const readGoModulePath = (repoPath: string): string | null => {
         if (!fs.existsSync(goModPath)) return null;
         const content = fs.readFileSync(goModPath, "utf8");
         const match = content.match(/^module\s+(.+)$/m);
-        const moduleValue = match?.[1];
-        return moduleValue ? moduleValue.trim() : null;
-    } catch {
-        return null;
-    }
+        return match?.[1] ? match[1].trim() : null;
+    } catch { return null; }
 };
 
 const readDartPackageName = (repoPath: string): string | null => {
@@ -368,21 +315,12 @@ const readDartPackageName = (repoPath: string): string | null => {
         if (!fs.existsSync(pubspecPath)) return null;
         const content = fs.readFileSync(pubspecPath, "utf8");
         const match = content.match(/^name:\s*(.+)$/m);
-        const nameValue = match?.[1];
-        return nameValue ? nameValue.trim() : null;
-    } catch {
-        return null;
-    }
+        return match?.[1] ? match[1].trim() : null;
+    } catch { return null; }
 };
 
-const resolveNonRelativeModule = (
-    moduleSpecifier: string,
-    fromFilePath: string,
-    repoPath: string,
-    index: ReturnType<typeof buildFileIndex>
-): string | null => {
+const resolveNonRelativeModule = (moduleSpecifier: string, fromFilePath: string, repoPath: string, index: ReturnType<typeof buildFileIndex>): string | null => {
     const normalizedSpecifier = moduleSpecifier.replace(/^@\//, "").replace(/^~\//, "");
-
     const tryWorkspacePackageRoots = (specifier: string): string | null => {
         const roots = [
             path.join(repoPath, specifier),
@@ -390,24 +328,19 @@ const resolveNonRelativeModule = (
             path.join(repoPath, "apps", specifier),
             path.join(repoPath, "src", specifier),
         ];
-
         for (const root of roots) {
             const resolved = resolvePathCandidates(root, ALL_EXTENSIONS, index.fileSet, ["index", "types", "main"]);
             if (resolved) return resolved;
-
             const packageJsonPath = path.join(root, "package.json");
-            if (index.fileSet.has(packageJsonPath)) {
+            if (index.fileSet.has(toPosixPath(packageJsonPath))) {
                 const packageEntry = resolvePathCandidates(root, ALL_EXTENSIONS, index.fileSet, ["index", "types", "main"]);
                 if (packageEntry) return packageEntry;
             }
         }
-
         return null;
     };
-
     const workspaceAliasMatch = tryWorkspacePackageRoots(normalizedSpecifier);
     if (workspaceAliasMatch) return workspaceAliasMatch;
-
     const keys = Array.from(index.relativeMap.keys());
     for (const rel of keys) {
         if (rel === normalizedSpecifier) return index.relativeMap.get(rel) ?? null;
@@ -416,26 +349,14 @@ const resolveNonRelativeModule = (
         const withTs = `${normalizedSpecifier}.ts`;
         if (rel.endsWith(`/${withJs}`) || rel.endsWith(`/${withTs}`)) return index.relativeMap.get(rel) ?? null;
     }
-
     const last = normalizedSpecifier.split('/').pop() ?? normalizedSpecifier;
     const matches = index.baseNameMap.get(last);
-    if (matches && matches.length > 0) {
-        return matches[0] ?? null;
-    }
-
+    if (matches && matches.length > 0) return matches[0] ?? null;
     return null;
 };
 
-const resolveDependency = (
-    ref: DependencyRef,
-    fromFilePath: string,
-    repoPath: string,
-    index: ReturnType<typeof buildFileIndex>,
-    goModulePath: string | null,
-    dartPackageName: string | null
-): string | null => {
+const resolveDependency = (ref: DependencyRef, fromFilePath: string, repoPath: string, index: ReturnType<typeof buildFileIndex>, goModulePath: string | null, dartPackageName: string | null): string | null => {
     const fromDir = path.dirname(fromFilePath);
-
     switch (ref.kind) {
         case "relative":
             {
@@ -540,223 +461,167 @@ const resolveDependency = (
     }
 };
 
+// FIX 4: Use path.posix internally to prevent ts-morph mismatch
+const resolveRelativeSourceFile = (
+    project: Project,
+    fromFile: SourceFile,
+    moduleSpecifier: string
+): SourceFile | null => {
+    if (!moduleSpecifier.startsWith(".")) return null;
+
+    const fromDirPosix = fromFile.getDirectoryPath(); 
+    const resolvedBase = path.posix.resolve(fromDirPosix, moduleSpecifier);
+    const extension = path.posix.extname(resolvedBase);
+    const candidates: string[] = [];
+
+    if (extension) {
+        candidates.push(resolvedBase);
+    } else {
+        const extensions = [".ts", ".tsx", ".js", ".jsx"];
+        for (const ext of extensions) candidates.push(`${resolvedBase}${ext}`);
+        for (const ext of extensions) candidates.push(path.posix.join(resolvedBase, `index${ext}`));
+    }
+
+    for (const candidate of candidates) {
+        const candidateFile = project.getSourceFile(candidate);
+        if (candidateFile) return candidateFile;
+    }
+
+    return null;
+};
+
 const parsePythonDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const trimmed = (line.split("#")[0] ?? "").trim();
         if (!trimmed) return;
-
         const fromMatch = trimmed.match(/^\s*from\s+([.\w]+)\s+import\s+/);
-        const fromValue = fromMatch?.[1];
-        if (fromValue) {
-            refs.push({ value: fromValue, kind: "python", label: "imports" });
-            return;
-        }
-
+        if (fromMatch?.[1]) return refs.push({ value: fromMatch[1], kind: "python", label: "imports" });
         const importMatch = trimmed.match(/^\s*import\s+([\w\s,\.]+)$/);
-        const importValue = importMatch?.[1];
-        if (importValue) {
-            importValue
-                .split(",")
-                .map((part) => part.trim().split(/\s+as\s+/)[0] ?? "")
-                .map((module) => module.trim())
-                .filter((module) => module.length > 0)
-                .forEach((module) => refs.push({ value: module, kind: "python", label: "imports" }));
+        if (importMatch?.[1]) {
+            importMatch[1].split(",").map((p) => p.trim().split(/\s+as\s+/)[0] ?? "").map((m) => m.trim()).filter((m) => m.length > 0).forEach((m) => refs.push({ value: m, kind: "python", label: "imports" }));
         }
     });
-
     return refs;
 };
 
 const parseGoDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
     let inBlock = false;
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const trimmed = line.trim();
-
-        if (trimmed.startsWith("import (") || trimmed === "import(") {
-            inBlock = true;
-            return;
-        }
-
-        if (inBlock && trimmed.startsWith(")")) {
-            inBlock = false;
-            return;
-        }
-
+        if (trimmed.startsWith("import (") || trimmed === "import(") { inBlock = true; return; }
+        if (inBlock && trimmed.startsWith(")")) { inBlock = false; return; }
         if (trimmed.startsWith("import ") && !trimmed.includes("(")) {
             const match = trimmed.match(/"([^"]+)"/);
-            const value = match?.[1];
-            if (value) refs.push({ value, kind: "go", label: "imports" });
+            if (match?.[1]) refs.push({ value: match[1], kind: "go", label: "imports" });
             return;
         }
-
         if (inBlock) {
             const match = trimmed.match(/"([^"]+)"/);
-            const value = match?.[1];
-            if (value) refs.push({ value, kind: "go", label: "imports" });
+            if (match?.[1]) refs.push({ value: match[1], kind: "go", label: "imports" });
         }
     });
-
     return refs;
 };
 
 const parseRustDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const trimmed = (line.split("//")[0] ?? "").trim();
         if (!trimmed) return;
-
         const modMatch = trimmed.match(/^\s*mod\s+([A-Za-z0-9_]+)\s*;/);
-        const modValue = modMatch?.[1];
-        if (modValue) {
-            refs.push({ value: modValue, kind: "rust-mod", label: "imports" });
-        }
-
+        if (modMatch?.[1]) refs.push({ value: modMatch[1], kind: "rust-mod", label: "imports" });
         const useMatch = trimmed.match(/^\s*use\s+([A-Za-z0-9_:]+)\s*;/);
-        const useValue = useMatch?.[1];
-        if (useValue) {
-            refs.push({ value: useValue, kind: "rust-use", label: "uses" });
-        }
+        if (useMatch?.[1]) refs.push({ value: useMatch[1], kind: "rust-use", label: "uses" });
     });
-
     return refs;
 };
 
 const parseJavaLikeDeps = (text: string, kind: "java" | "kotlin"): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const trimmed = (line.split("//")[0] ?? "").trim();
         if (!trimmed) return;
-
         const match = trimmed.match(/^\s*import\s+([A-Za-z0-9_.]+)\s*;?/);
-        const value = match?.[1];
-        if (value) {
-            refs.push({ value, kind, label: "imports" });
-        }
+        if (match?.[1]) refs.push({ value: match[1], kind, label: "imports" });
     });
-
     return refs;
 };
 
 const parseCSharpDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const trimmed = (line.split("//")[0] ?? "").trim();
         if (!trimmed) return;
-
         const match = trimmed.match(/^\s*using\s+([A-Za-z0-9_.]+)\s*;/);
-        const value = match?.[1];
-        if (value) refs.push({ value, kind: "csharp", label: "uses" });
+        if (match?.[1]) refs.push({ value: match[1], kind: "csharp", label: "uses" });
     });
-
     return refs;
 };
 
 const parseCIncludes = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const match = line.match(/^\s*#include\s+"([^"]+)"/);
-        const value = match?.[1];
-        if (value) refs.push({ value, kind: "c-include", label: "includes" });
+        if (match?.[1]) refs.push({ value: match[1], kind: "c-include", label: "includes" });
     });
-
     return refs;
 };
 
 const parseRubyDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const match = line.match(/^\s*require(_relative)?\s+["']([^"']+)["']/);
-        const value = match?.[2];
-        if (value) {
-            refs.push({ value, kind: "ruby", label: "requires" });
-        }
+        if (match?.[2]) refs.push({ value: match[2], kind: "ruby", label: "requires" });
     });
-
     return refs;
 };
 
 const parsePhpDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const match = line.match(/^\s*(require|require_once|include|include_once)\s*\(?\s*["']([^"']+)["']/i);
-        const value = match?.[2];
-        if (value) refs.push({ value, kind: "php", label: "includes" });
+        if (match?.[2]) refs.push({ value: match[2], kind: "php", label: "includes" });
     });
-
     return refs;
 };
 
 const parseDartDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const match = line.match(/^\s*(import|part)\s+["']([^"']+)["']/);
-        const value = match?.[2];
-        if (value) refs.push({ value, kind: "dart", label: "imports" });
+        if (match?.[2]) refs.push({ value: match[2], kind: "dart", label: "imports" });
     });
-
     return refs;
 };
 
 const parseLuaDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const match = line.match(/require\s*\(?\s*["']([^"']+)["']/);
-        const value = match?.[1];
-        if (value) refs.push({ value, kind: "lua", label: "requires" });
+        if (match?.[1]) refs.push({ value: match[1], kind: "lua", label: "requires" });
     });
-
     return refs;
 };
 
 const parseSwiftDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const match = line.match(/^\s*import\s+([A-Za-z0-9_]+)/);
-        const value = match?.[1];
-        if (value) refs.push({ value, kind: "swift", label: "imports" });
+        if (match?.[1]) refs.push({ value: match[1], kind: "swift", label: "imports" });
     });
-
     return refs;
 };
 
 const parseShellDeps = (text: string): DependencyRef[] => {
     const refs: DependencyRef[] = [];
-    const lines = text.split(/\r?\n/);
-    lines.forEach((line) => {
+    text.split(/\r?\n/).forEach((line) => {
         const trimmed = (line.split("#")[0] ?? "").trim();
         if (!trimmed) return;
-
         const match = trimmed.match(/^\s*(source|\.)\s+([^\s]+)/);
-        const value = match?.[2];
-        if (value) {
-            refs.push({ value: value.replace(/["']/g, ""), kind: "shell", label: "sources" });
-        }
+        if (match?.[2]) refs.push({ value: match[2].replace(/["']/g, ""), kind: "shell", label: "sources" });
     });
-
     return refs;
 };
 
@@ -784,38 +649,6 @@ const DEPENDENCY_PARSERS: Record<string, (text: string) => DependencyRef[]> = {
     ".sh": parseShellDeps,
     ".bash": parseShellDeps,
     ".zsh": parseShellDeps,
-};
-
-const resolveRelativeSourceFile = (
-    project: Project,
-    fromFile: SourceFile,
-    moduleSpecifier: string
-): SourceFile | null => {
-    if (!moduleSpecifier.startsWith(".")) return null;
-
-    const fromDir = fromFile.getDirectoryPath();
-    const resolvedBase = path.resolve(fromDir, moduleSpecifier);
-    const extension = path.extname(resolvedBase);
-    const candidates: string[] = [];
-
-    if (extension) {
-        candidates.push(resolvedBase);
-    } else {
-        const extensions = [".ts", ".tsx", ".js", ".jsx"];
-        for (const ext of extensions) {
-            candidates.push(`${resolvedBase}${ext}`);
-        }
-        for (const ext of extensions) {
-            candidates.push(path.join(resolvedBase, `index${ext}`));
-        }
-    }
-
-    for (const candidate of candidates) {
-        const candidateFile = project.getSourceFile(candidate);
-        if (candidateFile) return candidateFile;
-    }
-
-    return null;
 };
 
 const findNpmDependencies = (allFiles: string[]): Set<string> => {
@@ -847,9 +680,63 @@ export const analyzeRepo = async (
 ): Promise<RepoGraph> => {
     const reportProgress = makeProgressReporter(onProgress);
 
+    const posixRepoPath = toPosixPath(repoPath);
+
+    // FIX 1: Robust case-insensitive `toNodeId` to strip root paths flawlessly on Windows
+    const toNodeId = (abs: string) => {
+        const posixAbs = abs.split("\\").join("/").split(path.sep).join("/");
+        const posixAbsLower = posixAbs.toLowerCase();
+        const prefix = (posixRepoPath.endsWith("/") ? posixRepoPath : posixRepoPath + "/").toLowerCase();
+        
+        if (posixAbsLower.startsWith(prefix)) {
+            return posixAbs.slice(prefix.length);
+        }
+        
+        const repoFolderName = posixRepoPath.split("/").pop()?.toLowerCase() ?? "";
+        const searchStr = "/" + repoFolderName + "/";
+        const idx = posixAbsLower.indexOf(searchStr);
+        if (idx !== -1) {
+            return posixAbs.slice(idx + searchStr.length);
+        }
+        
+        return posixAbs.split("/").pop() ?? posixAbs;
+    };
+
+    console.log("repoPath:", repoPath);
+    console.log("posixRepoPath:", posixRepoPath);
+    
+    const testPath = toPosixPath(path.join(repoPath, "apps", "web", "src", "test.tsx"));
+    console.log("toNodeId test:", toNodeId(testPath)); // Expecting: apps/web/src/test.tsx
+
     await reportProgress({ phase: "indexing", percent: 4, detail: "Loading source files" });
     const project = new Project();
-    project.addSourceFilesAtPaths(path.join(repoPath, "**/*.{ts,js,tsx,jsx}"));
+    
+    // FIX 3: Initialize ts-morph properly using tsconfig files to unlock module aliases (e.g., @/)
+    const tsconfigPaths = [
+        path.join(repoPath, "tsconfig.json"),
+        path.join(repoPath, "apps/web/tsconfig.json"),
+        path.join(repoPath, "apps/worker/tsconfig.json"),
+        path.join(repoPath, "packages/shared/tsconfig.json"),
+    ].filter(p => fs.existsSync(p));
+
+    if (tsconfigPaths.length > 0) {
+        tsconfigPaths.forEach(tc => {
+            try { project.addSourceFilesFromTsConfig(tc); } catch {}
+        });
+    }
+
+    console.log("tsconfig paths found:", tsconfigPaths);
+    console.log("source files loaded from tsconfig:", project.getSourceFiles().length);
+    
+    if (project.getSourceFiles().length === 0) {
+        // Fallbacks for mono-repos and standard setups just in case
+        project.addSourceFilesAtPaths([
+            `${posixRepoPath}/apps/web/src/**/*.{ts,tsx}`,
+            `${posixRepoPath}/apps/worker/src/**/*.{ts,tsx}`,
+            `${posixRepoPath}/packages/**/*.{ts,tsx}`,
+            `${posixRepoPath}/**/*.{ts,js,tsx,jsx}` 
+        ]);
+    }
 
     await reportProgress({ phase: "indexing", percent: 8, detail: "Scanning repository" });
 
@@ -923,15 +810,9 @@ export const analyzeRepo = async (
         }
 
         const merged: RepoNode = { ...existing };
-        if (node.label && node.label !== existing.label) {
-            merged.label = node.label;
-        }
-        if (node.type && node.type !== existing.type) {
-            merged.type = node.type;
-        }
-        if (node.codeSnippet && (preferSnippet || !existing.codeSnippet)) {
-            merged.codeSnippet = node.codeSnippet;
-        }
+        if (node.label && node.label !== existing.label) merged.label = node.label;
+        if (node.type && node.type !== existing.type) merged.type = node.type;
+        if (node.codeSnippet && (preferSnippet || !existing.codeSnippet)) merged.codeSnippet = node.codeSnippet;
 
         nodeMap.set(node.id, merged);
     };
@@ -950,15 +831,13 @@ export const analyzeRepo = async (
         
         const pkgRoot = determinePackageRoot(filePath, repoPath);
         const node: RepoNode = {
-            id: filePath,
+            id: toNodeId(filePath),
             label: sourceFile.getBaseName(),
             type: "file",
             ...(pkgRoot ? { packageRoot: pkgRoot } : {})
         };
 
-        if (snippet !== undefined) {
-            node.codeSnippet = snippet;
-        }
+        if (snippet !== undefined) node.codeSnippet = snippet;
 
         addNode(node, true);
     };
@@ -971,15 +850,13 @@ export const analyzeRepo = async (
         
         const pkgRoot = determinePackageRoot(filePath, repoPath);
         const node: RepoNode = {
-            id: filePath,
+            id: toNodeId(filePath),
             label: path.basename(filePath),
             type: "file",
             ...(pkgRoot ? { packageRoot: pkgRoot } : {})
         };
 
-        if (snippet !== undefined) {
-            node.codeSnippet = snippet;
-        }
+        if (snippet !== undefined) node.codeSnippet = snippet;
 
         addNode(node);
 
@@ -1007,6 +884,7 @@ export const analyzeRepo = async (
 
     const sourceStep = getProgressStep(sourceFiles.length);
     let tsEdgeCount = 0;
+    
     for (let i = 0; i < sourceFiles.length; i += 1) {
         const sourceFile = sourceFiles[i];
         if (!sourceFile) continue;
@@ -1014,6 +892,7 @@ export const analyzeRepo = async (
         if (!filePath) continue;
 
         addFileNode(sourceFile);
+        const nodeId = toNodeId(filePath);
 
         sourceFile.getImportDeclarations().forEach((importDecl) => {
             const moduleSpecifier = importDecl.getModuleSpecifierValue();
@@ -1044,7 +923,7 @@ export const analyzeRepo = async (
                     
                     tsEdgeCount++;
                     addEdge({
-                        source: filePath,
+                        source: nodeId,
                         target: npmNodeId,
                         label: "imports"
                     });
@@ -1057,8 +936,8 @@ export const analyzeRepo = async (
 
             tsEdgeCount++;
             addEdge({
-                source: filePath,
-                target: targetPath,
+                source: nodeId,
+                target: toNodeId(targetPath),
                 label: "imports"
             });
         });
@@ -1096,7 +975,7 @@ export const analyzeRepo = async (
                         
                         tsEdgeCount++;
                         addEdge({
-                            source: filePath,
+                            source: nodeId,
                             target: npmNodeId,
                             label: "imports"
                         });
@@ -1109,8 +988,8 @@ export const analyzeRepo = async (
 
                 tsEdgeCount++;
                 addEdge({
-                    source: filePath,
-                    target: targetPath,
+                    source: nodeId,
+                    target: toNodeId(targetPath),
                     label: "imports"
                 });
 
@@ -1124,12 +1003,11 @@ export const analyzeRepo = async (
                 const url = args[0]?.getText().replace(/['"`]/g, "") || "unknown-endpoint";
 
                 const apiNodeId = `api-${url}`;
-
                 addNode({ id: apiNodeId, label: url, type: "api-endpoint" });
 
                 tsEdgeCount++;
                 addEdge({
-                    source: filePath,
+                    source: nodeId,
                     target: apiNodeId,
                     label: "calls"
                 });
@@ -1144,7 +1022,7 @@ export const analyzeRepo = async (
                 const dbNodeId = "database-layer";
                 addNode({ id: dbNodeId, label: "Database/Storage", type: "storage" });
                 addEdge({
-                    source: filePath,
+                    source: nodeId,
                     target: dbNodeId,
                     label: "persists"
                 });
@@ -1162,12 +1040,14 @@ export const analyzeRepo = async (
         }
     }
 
+    const tsFileSet = new Set(sourceFiles.map(sf => toPosixPath(sf.getFilePath())));
     const jsTsExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
     const jsFiles = allFiles.filter((filePath) => {
         if (!filePath) return false;
+        const posix = toPosixPath(filePath);
         const ext = path.extname(filePath).toLowerCase();
-        return jsTsExtensions.has(ext);
+        return jsTsExtensions.has(ext) && !tsFileSet.has(posix);
     });
 
     if (jsFiles.length === 0) {
@@ -1184,6 +1064,8 @@ export const analyzeRepo = async (
 
         const text = readFileText(filePath);
         if (!text) continue;
+        
+        const nodeId = toNodeId(filePath);
 
         let match: RegExpExecArray | null;
         importRegex.lastIndex = 0;
@@ -1204,11 +1086,11 @@ export const analyzeRepo = async (
                 if (baseModule && knownNpmDeps.has(baseModule)) {
                      const npmNodeId = `npm:${baseModule}`;
                      addNode({ id: npmNodeId, label: baseModule, type: "npm-package", packageRoot: "npm-dependencies" });
-                     addEdge({ source: filePath, target: npmNodeId, label: 'imports' });
+                     addEdge({ source: nodeId, target: npmNodeId, label: 'imports' });
                 }
                 continue;
             }
-            addEdge({ source: filePath, target, label: 'imports' });
+            addEdge({ source: nodeId, target: toNodeId(target), label: 'imports' });
         }
 
         requireRegex.lastIndex = 0;
@@ -1229,11 +1111,11 @@ export const analyzeRepo = async (
                 if (baseModule && knownNpmDeps.has(baseModule)) {
                      const npmNodeId = `npm:${baseModule}`;
                      addNode({ id: npmNodeId, label: baseModule, type: "npm-package", packageRoot: "npm-dependencies" });
-                     addEdge({ source: filePath, target: npmNodeId, label: 'imports' });
+                     addEdge({ source: nodeId, target: npmNodeId, label: 'imports' });
                 }
                 continue;
             }
-            addEdge({ source: filePath, target, label: 'imports' });
+            addEdge({ source: nodeId, target: toNodeId(target), label: 'imports' });
         }
 
         if (i % jsStep === 0 || i === jsFiles.length - 1) {
@@ -1268,6 +1150,8 @@ export const analyzeRepo = async (
 
         const text = readFileText(filePath);
         if (!text) continue;
+        
+        const nodeId = toNodeId(filePath);
 
         const refs = parser(text);
         refs.forEach((ref) => {
@@ -1275,8 +1159,8 @@ export const analyzeRepo = async (
             if (!target || target === filePath) return;
 
             addEdge({
-                source: filePath,
-                target,
+                source: nodeId,
+                target: toNodeId(target),
                 label: ref.label
             });
         });
@@ -1291,6 +1175,9 @@ export const analyzeRepo = async (
             });
         }
     }
+
+    console.log("Final edge count:", edges.length);
+    console.log("Sample edges:", edges.slice(0, 5));
 
     await reportProgress({ phase: "finalizing", percent: 100, detail: "Graph ready" });
 
