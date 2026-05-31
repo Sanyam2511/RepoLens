@@ -19,7 +19,6 @@ import dagre from "dagre";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { RepoNode, RepoGraph } from "shared";
-// FIXED: Added categorizeNode to the imports
 import { NODE_TYPES, ROLE_COLORS, NodeCategory, categorizeNode, type GraphNodeData } from "./GraphNodes";
 import { Copy, AlertTriangle, Search, X } from "lucide-react";
 
@@ -45,7 +44,16 @@ const getDisplayName = (normalizedPath: string) => {
   return { filename, relativePath };
 };
 
-const IGNORED_EXTS = new Set(["svg", "ico", "png", "jpg", "jpeg", "css", "scss", "md", "mdx", "sql", "toml", "prisma", "lock"]);
+const IGNORED_EXTS = new Set(["svg", "ico", "png", "jpg", "jpeg", "css", "scss", "md", "mdx", "sql", "toml", "prisma", "lock", "yml", "yaml", "txt", "woff", "woff2", "ttf", "eot"]);
+
+// FIX: Removed tsconfig.json and tsconfig.node.json
+const IGNORED_FILES = new Set([
+  ".gitignore", ".env", ".env.example", ".env.local", 
+  "package-lock.json", "yarn.lock", "pnpm-lock.yaml", 
+  "eslint.config.mjs", "eslint.config.js", "postcss.config.mjs", "postcss.config.js", 
+  "tailwind.config.ts", "tailwind.config.js", "next.config.ts", "next.config.js", 
+  "vitest.config.ts", "jest.config.ts"
+]);
 
 export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph | null }) {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node<GraphNodeData>, Edge> | null>(null);
@@ -66,8 +74,10 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       if (n.type !== 'file') return true; 
       const filename = n.id.split('/').pop()?.toLowerCase() || "";
       if (filename === "package.json") return true;
-      const ext = filename.includes(".") ? filename.split('.').pop() : "";
-      return !IGNORED_EXTS.has(ext || "");
+      if (IGNORED_FILES.has(filename)) return false;
+      const ext = filename.includes(".") ? filename.split('.').pop()?.toLowerCase() : "";
+      if (ext && IGNORED_EXTS.has(ext)) return false;
+      return true;
     });
 
     const nodeIds = new Set(cleanedNodes.map(n => n.id));
@@ -107,11 +117,9 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         return;
       }
       if (visited.has(nodeId)) return;
-
       visited.add(nodeId);
       recStack.add(nodeId);
       path.push(nodeId);
-
       const neighbors = adjacency.get(nodeId) ?? [];
       for (const next of neighbors) detectCycle(next, [...path]);
       recStack.delete(nodeId);
@@ -119,7 +127,14 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
     cleanedNodes.forEach(n => { if (!visited.has(n.id)) detectCycle(n.id, []); });
 
-    return { nodes: cleanedNodes, edges: validEdges, inDegree, outDegree, cyclicNodes, cyclicEdges, adjacency, reverseAdjacency };
+    const categorizedNodes = cleanedNodes.map(n => ({
+      ...n,
+      inbound: inDegree.get(n.id) ?? 0,
+      outbound: outDegree.get(n.id) ?? 0,
+      category: categorizeNode({ kind: n.type, inbound: inDegree.get(n.id), outbound: outDegree.get(n.id), category: undefined })
+    }));
+
+    return { nodes: categorizedNodes, edges: validEdges, inDegree, outDegree, cyclicNodes, cyclicEdges, adjacency, reverseAdjacency };
   }, [graphData]);
 
   const mapDataToCanvas = useCallback(() => {
@@ -151,8 +166,16 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       g.setDefaultEdgeLabel(() => ({}));
       g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120, marginx: 40, marginy: 40 });
 
-      connectedNodes.forEach(n => g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT }));
+      connectedNodes.forEach(n => {
+        const dynamicWidth = (inDegree.get(n.id) ?? 0) > 4 ? 300 : NODE_WIDTH;
+        g.setNode(n.id, { width: dynamicWidth, height: NODE_HEIGHT });
+      });
       edgesToRender.forEach(e => g.setEdge(e.source, e.target, { weight: cyclicEdges.has(`${e.source}->${e.target}`) ? 1 : 10 }));
+
+      const nodesWithInbound = new Set(edgesToRender.map(e => e.target));
+      const entryNodes = connectedNodes.filter(n => !nodesWithInbound.has(n.id));
+      g.setNode("__INVISIBLE_ROOT__", { width: 1, height: 1 });
+      entryNodes.forEach(n => g.setEdge("__INVISIBLE_ROOT__", n.id, { weight: 1, minlen: 1 }));
 
       dagre.layout(g);
 
@@ -160,6 +183,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         const pos = g.node(n.id);
         const { filename, relativePath } = getDisplayName(n.id);
         const extension = filename.includes(".") ? filename.split(".").pop() : "";
+        const dynamicWidth = (inDegree.get(n.id) ?? 0) > 4 ? 300 : NODE_WIDTH;
 
         maxDagreY = Math.max(maxDagreY, pos.y + NODE_HEIGHT);
 
@@ -167,20 +191,20 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
           id: n.id,
           targetPosition: Position.Top,
           sourcePosition: Position.Bottom,
-          position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
+          position: { x: pos.x - dynamicWidth / 2, y: pos.y - NODE_HEIGHT / 2 },
           type: "detailNode",
           data: {
             label: filename,
             rawLabel: n.id,
             pathLabel: relativePath,
             kind: n.type,
-            category: categorizeNode({ kind: n.type, inbound: inDegree.get(n.id) ?? 0, outbound: outDegree.get(n.id) ?? 0, category: undefined }),
-            inbound: inDegree.get(n.id) ?? 0,
-            outbound: outDegree.get(n.id) ?? 0,
+            category: n.category as NodeCategory,
+            inbound: n.inbound,
+            outbound: n.outbound,
             isCyclic: cyclicNodes.has(n.id),
             extension,
             codeSnippet: n.codeSnippet,
-            width: NODE_WIDTH,
+            width: dynamicWidth,
           },
         });
       });
@@ -188,11 +212,9 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
     if (isolatedNodes.length > 0) {
       const startY = maxDagreY > 0 ? maxDagreY + 120 : 40;
-      
       isolatedNodes.forEach((n, index) => {
         const row = Math.floor(index / GRID_COLS);
         const col = index % GRID_COLS;
-        
         const x = col * (NODE_WIDTH + 60);
         const y = startY + row * (NODE_HEIGHT + 60);
 
@@ -224,14 +246,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
     const layoutedEdges: Edge[] = edgesToRender.map((edge) => {
       const sourceNode = visibleNodesData.find(n => n.id === edge.source);
-      // Ensure category calculation is strongly typed to avoid 'any' error
-      const category = categorizeNode({ 
-        kind: sourceNode?.type as any, 
-        inbound: inDegree.get(edge.source) ?? 0, 
-        outbound: outDegree.get(edge.source) ?? 0, 
-        category: undefined 
-      });
-      const color = ROLE_COLORS[category]?.border ?? "#64748b";
+      const color = ROLE_COLORS[(sourceNode?.category as NodeCategory) ?? "internal"]?.border ?? "#64748b";
       const isCyclicEdge = cyclicEdges.has(`${edge.source}->${edge.target}`);
 
       return {
@@ -276,14 +291,14 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
   const focusedNodeData = useMemo(() => nodes.find(n => n.id === focusedNodeId)?.data as GraphNodeData | undefined, [nodes, focusedNodeId]);
   
-  const handleNodeClick = (_: React.MouseEvent, node: Node<GraphNodeData>) => {
+  const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     setFocusedNodeId(node.id);
-    if (rfInstance) rfInstance.setCenter(node.position.x + NODE_WIDTH / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 1, duration: 600 });
+    if (rfInstance) rfInstance.setCenter(node.position.x + (node.data.width as number) / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 1, duration: 600 });
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const target = nodes.find(n => n.data.label.toLowerCase().includes(searchQuery.toLowerCase()));
+    const target = nodes.find(n => (n.data as GraphNodeData).label.toLowerCase().includes(searchQuery.toLowerCase()));
     if (target) handleNodeClick(e as any, target);
   };
 
@@ -301,7 +316,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
             <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100"><div className="font-black text-slate-800">{nodes.length}</div><div className="text-[10px] uppercase text-slate-500">Nodes</div></div>
             <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100"><div className="font-black text-slate-800">{edges.length}</div><div className="text-[10px] uppercase text-slate-500">Edges</div></div>
             <div className="bg-red-50 rounded-lg p-2 text-center border border-red-100"><div className="font-black text-red-600">{processedData?.cyclicNodes.size ?? 0}</div><div className="text-[10px] uppercase text-red-500">Cycles</div></div>
-            <div className="bg-amber-50 rounded-lg p-2 text-center border border-amber-100"><div className="font-black text-amber-600">{Array.from(processedData?.inDegree.values() || []).filter(v => v > 6).length}</div><div className="text-[10px] uppercase text-amber-500">Hotspots</div></div>
+            <div className="bg-amber-50 rounded-lg p-2 text-center border border-amber-100"><div className="font-black text-amber-600">{Array.from(processedData?.inDegree.values() || []).filter(v => v > 4).length}</div><div className="text-[10px] uppercase text-amber-500">Hotspots</div></div>
           </div>
 
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 border-t pt-3">Role Legend</div>
@@ -377,7 +392,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         </div>
       </div>
 
-      {/* FIXED: Added generic parameter <Node<GraphNodeData>, Edge> */}
       <ReactFlow<Node<GraphNodeData>, Edge>
         nodes={nodes}
         edges={edges}
@@ -393,7 +407,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#cbd5e1" />
         <Controls className="bg-white border-slate-200 text-slate-600 shadow-md" />
-        <MiniMap maskColor="rgba(248, 250, 252, 0.8)" nodeColor={(n) => ROLE_COLORS[n.data.category ?? "internal"]?.border ?? "#64748b"} />
+        <MiniMap maskColor="rgba(248, 250, 252, 0.8)" nodeColor={(n) => ROLE_COLORS[(n.data as GraphNodeData).category ?? "internal"]?.border ?? "#64748b"} />
       </ReactFlow>
     </div>
   );
