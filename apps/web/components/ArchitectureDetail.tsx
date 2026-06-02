@@ -349,7 +349,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         <form onSubmit={handleSearch} className="bg-white rounded-xl shadow-lg border border-slate-200 p-2 flex items-center gap-2">
           <Search className="w-4 h-4 text-slate-400 ml-2" />
           <input
-            type="text" placeholder="Focus on file..."
+            type="text" placeholder="Search a file..."
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
             className="flex-1 outline-none text-sm bg-transparent"
           />
