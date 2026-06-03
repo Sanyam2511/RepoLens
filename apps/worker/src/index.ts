@@ -5,7 +5,7 @@ import { analyzeRepo } from './analyzer.js';
 import { downloadRepo, getRepoCommitSha } from './downloader.js';
 import { analysisQueue } from './queue.js';
 import { createUser, getUserFromToken, loginUser, revokeToken } from './authStore.js';
-import { getAnalysisHistoryById, getCachedGraph, listAnalysisHistory, saveAnalysis } from './storage.js';
+import { getAnalysisHistoryById, listAnalysisHistory, saveAnalysis } from './storage.js';
 
 const allowedOrigins = new Set([
     'http://localhost:3000',
@@ -277,23 +277,6 @@ app.post('/analyze', async (req, res) => {
     const currentUser = getCurrentUser(req);
 
     try {
-        const cachedGraph = await getCachedGraph(normalizedRepoUrl);
-        if (cachedGraph) {
-            if (currentUser) {
-                try {
-                    await saveAnalysis(normalizedRepoUrl, cachedGraph, null, currentUser.id);
-                } catch (cacheSaveError) {
-                    console.warn('Failed to record cached analysis for user history:', cacheSaveError);
-                }
-            }
-
-            res.json({
-                cached: true,
-                result: cachedGraph
-            });
-            return;
-        }
-
         try {
             const job = await analysisQueue.add('analyze-repo', { repoUrl: normalizedRepoUrl, userId: currentUser?.id ?? null });
 

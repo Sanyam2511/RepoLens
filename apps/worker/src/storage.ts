@@ -4,17 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const prisma = new PrismaClient();
-const ANALYSIS_CACHE_VERSION = 2;
 const LOCAL_HISTORY_PATH = path.join(
   process.env.REPOLENS_TEMP_DIR || path.join(process.cwd(), "temp"),
   "analysis-history.json"
 );
-
-const getCachedGraphVersion = (graph: RepoGraph | null): number | null => {
-  if (!graph) return null;
-  const meta = (graph as unknown as RepoGraph & { meta?: { cacheVersion?: number } }).meta;
-  return typeof meta?.cacheVersion === "number" ? meta.cacheVersion : null;
-};
 
 const readLocalHistory = (): AnalysisHistoryRecord[] => {
   try {
@@ -48,59 +41,16 @@ const upsertLocalHistory = (record: AnalysisHistoryRecord) => {
   writeLocalHistory(records);
 };
 
-export const getCachedGraph = async (repoUrl: string): Promise<RepoGraph | null> => {
-  try {
-    const record = await prisma.repoAnalysis.findUnique({
-      where: { repoUrl },
-    });
-
-    if (!record) {
-      return null;
-    }
-
-    if (record.edgeCount === 0 && record.nodeCount > 1) {
-      return null;
-    }
-
-    const graph = record.graphJson as unknown as RepoGraph;
-    if (getCachedGraphVersion(graph) !== ANALYSIS_CACHE_VERSION) {
-      return null;
-    }
-
-    return graph;
-  } catch {
-    const localRecord = readLocalHistory().find((item) => item.repoUrl === repoUrl);
-    if (!localRecord) {
-      return null;
-    }
-
-    if (localRecord.edgeCount === 0 && localRecord.nodeCount > 1) {
-      return null;
-    }
-
-    if (getCachedGraphVersion(localRecord.graphJson) !== ANALYSIS_CACHE_VERSION) {
-      return null;
-    }
-
-    return localRecord.graphJson;
-  }
-};
-
 export const saveAnalysis = async (
   repoUrl: string,
   graph: RepoGraph,
   commitSha?: string | null,
   userId: string | null = null
 ) => {
-  const graphWithMeta = {
-    ...graph,
-    meta: { cacheVersion: ANALYSIS_CACHE_VERSION },
-  };
-
   const payload = {
     repoUrl,
     commitSha: commitSha ?? null,
-    graphJson: graphWithMeta as unknown as Prisma.InputJsonValue,
+    graphJson: graph as unknown as Prisma.InputJsonValue,
     nodeCount: graph.nodes.length,
     edgeCount: graph.edges.length,
   };
@@ -119,7 +69,7 @@ export const saveAnalysis = async (
       commitSha: result.commitSha,
       nodeCount: result.nodeCount,
       edgeCount: result.edgeCount,
-      graphJson: graphWithMeta as unknown as RepoGraph,
+      graphJson: graph as unknown as RepoGraph,
       createdAt: result.createdAt.toISOString(),
       updatedAt: result.updatedAt.toISOString(),
     });
@@ -135,7 +85,7 @@ export const saveAnalysis = async (
       commitSha: commitSha ?? null,
       nodeCount: graph.nodes.length,
       edgeCount: graph.edges.length,
-      graphJson: graphWithMeta as unknown as RepoGraph,
+      graphJson: graph as unknown as RepoGraph,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };

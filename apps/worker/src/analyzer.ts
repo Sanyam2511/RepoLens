@@ -66,8 +66,24 @@ const IGNORED_FILES = new Set([
     "vitest.config.ts", "jest.config.ts"
 ]);
 
-// Normalize any path to forward slashes
-const toPosix = (p: string): string => p.split("\\").join("/").split(path.sep).join("/");
+// Normalizes any path to posix forward slashes AND lowercase drive letter.
+// This is the single source of truth for all path normalization in this file.
+// Critical on Windows: different APIs return C:/ vs c:/ for the same drive,
+// causing Set lookups to fail. We normalize everything to lowercase drive letters.
+const toPosix = (p: string): string => {
+    let result = p.split("\\").join("/");
+    // Normalize Windows drive letter to lowercase: C:/ -> c:/, D:/ -> d:/
+    result = result.replace(/^([A-Za-z]):\//, (_, d) => d.toLowerCase() + ":/");
+    return result;
+};
+
+// JS/TS extensions used by the regex pass to resolve require('./module') without extension
+const JS_TS_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"];
+
+// ALL_EXTENSIONS_WITH_JS: used in regex pass so require('./routes/auth') finds auth.js
+// This is separate from ALL_EXTENSIONS (which is for non-JS languages only)
+// and is the fix for CommonJS repos where internal requires resolve to .js files
+const JS_TS_EXTENSIONS_WITH_INDEX = [...JS_TS_EXTENSIONS];
 
 const buildSnippetFromText = (text: string): string | undefined => {
     const trimmed = text.trim();
@@ -107,7 +123,6 @@ const readFileText = (filePath: string): string | null => {
     } catch { return null; }
 };
 
-// Check if any path segment is an ignored directory - works for both slash styles
 const isIgnoredPath = (filePath: string): boolean => {
     const posix = toPosix(filePath);
     return posix.split("/").some((seg) => IGNORED_DIRS.has(seg));
@@ -148,7 +163,11 @@ const EXTENSIONS_BY_KIND: Record<ExtensionKind, string[]> = {
     swift: [".swift"], shell: [".sh", ".bash", ".zsh"],
 };
 
+// Non-JS language extensions only — used for non-JS dependency parsers
 const ALL_EXTENSIONS = Array.from(new Set(Object.values(EXTENSIONS_BY_KIND).flat()));
+
+// All extensions including JS/TS — used in regex pass for CommonJS require() resolution
+const ALL_EXTENSIONS_INCLUDING_JS = [...JS_TS_EXTENSIONS, ...ALL_EXTENSIONS];
 
 const getRelativePath = (rootDir: string, filePath: string) =>
     toPosix(path.relative(rootDir, filePath));
@@ -160,6 +179,7 @@ const buildFileIndex = (rootDir: string, files: string[]) => {
     const goPackageMap = new Map<string, string>();
 
     files.forEach((filePath) => {
+        // toPosix normalizes drive letter casing — critical for Windows Set lookups
         const normalized = toPosix(path.resolve(filePath));
         fileSet.add(normalized);
         const relative = getRelativePath(rootDir, path.resolve(filePath));
@@ -180,18 +200,28 @@ const buildFileIndex = (rootDir: string, files: string[]) => {
 const resolvePathCandidates = (
     basePath: string, extensions: string[], fileSet: Set<string>, indexNames: string[] = ["index"]
 ): string | null => {
+    // toPosix normalizes drive letter so Set.has() matches correctly on Windows
     const normalized = toPosix(path.resolve(basePath));
-    if (path.extname(normalized)) return fileSet.has(normalized) ? normalized : null;
+
+    // If path already has an extension, check it directly
+    if (path.extname(normalized)) {
+        return fileSet.has(normalized) ? normalized : null;
+    }
+
+    // Try appending each extension: ./routes/auth -> ./routes/auth.js, ./routes/auth.ts, etc.
     for (const ext of extensions) {
         const c = `${normalized}${ext}`;
         if (fileSet.has(c)) return c;
     }
+
+    // Try index files: ./routes -> ./routes/index.js, etc.
     for (const ext of extensions) {
         for (const idx of indexNames) {
             const c = `${normalized}/${idx}${ext}`;
             if (fileSet.has(c)) return c;
         }
     }
+
     return null;
 };
 
@@ -256,15 +286,19 @@ const resolveNonRelativeModule = (
     index: ReturnType<typeof buildFileIndex>
 ): string | null => {
     const ns = moduleSpecifier.replace(/^@\//, "").replace(/^~\//, "");
+    // Try workspace roots first (monorepo support)
     const roots = [repoPath, path.join(repoPath, "packages"), path.join(repoPath, "apps"), path.join(repoPath, "src")];
     for (const root of roots) {
-        const r = resolvePathCandidates(path.join(root, ns), ALL_EXTENSIONS, index.fileSet, ["index", "types", "main"]);
+        // Use ALL_EXTENSIONS_INCLUDING_JS so workspace packages with .js/.ts files resolve
+        const r = resolvePathCandidates(path.join(root, ns), ALL_EXTENSIONS_INCLUDING_JS, index.fileSet, ["index", "types", "main"]);
         if (r) return r;
     }
+    // Try matching by relative path suffix
     for (const rel of index.relativeMap.keys()) {
         if (rel === ns || rel.endsWith(`/${ns}`) || rel.endsWith(`/${ns}.js`) || rel.endsWith(`/${ns}.ts`))
             return index.relativeMap.get(rel) ?? null;
     }
+    // Try matching by basename
     const last = ns.split("/").pop() ?? ns;
     return index.baseNameMap.get(last)?.[0] ?? null;
 };
@@ -310,7 +344,7 @@ const resolveDependency = (
     }
 };
 
-// Uses path.posix to match ts-morph's internal forward-slash format exactly
+// Uses path.posix to match ts-morph's internal forward-slash paths
 const resolveRelativeSourceFile = (project: Project, fromFile: SourceFile, moduleSpecifier: string): SourceFile | null => {
     if (!moduleSpecifier.startsWith(".")) return null;
     const fromDir = fromFile.getDirectoryPath(); // ts-morph always returns posix
@@ -488,23 +522,22 @@ const determinePackageRoot = (filePath: string, posixRepoPath: string): string |
 export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporter): Promise<RepoGraph> => {
     const reportProgress = makeProgressReporter(onProgress);
 
-    // THE KEY FIX: one canonical posix root used for ALL path operations
+    // path.resolve gives the canonical OS absolute path, toPosix normalizes slashes + drive letter
     const posixRepoPath = toPosix(path.resolve(repoPath));
 
-    // Converts any absolute path (Windows or posix) to a short relative node ID
-    // Uses lowercase comparison to handle Windows drive letter casing (C:/ vs c:/)
+    // Converts any absolute path to a clean relative node ID.
+    // Uses lowercase comparison to handle Windows drive letter casing differences.
     const toNodeId = (abs: string): string => {
         const posixAbs = toPosix(abs);
         const posixAbsLower = posixAbs.toLowerCase();
         const prefixLower = (posixRepoPath.endsWith("/") ? posixRepoPath : posixRepoPath + "/").toLowerCase();
 
         if (posixAbsLower.startsWith(prefixLower)) {
-            // Slice using the prefix LENGTH (not the lowercased string)
-            // so the result preserves original filename casing
+            // Slice by prefix LENGTH to preserve original filename casing in the result
             return posixAbs.slice(prefixLower.length);
         }
 
-        // Fallback: search for /repo-xxxx/ pattern in temp paths
+        // Fallback for temp-dir paths like /tmp/repolens-temp/repo-abc123/...
         const repoFolder = posixRepoPath.split("/").pop()?.toLowerCase() ?? "";
         if (repoFolder) {
             const needle = "/" + repoFolder + "/";
@@ -512,23 +545,20 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             if (idx !== -1) return posixAbs.slice(idx + needle.length);
         }
 
-        // Last resort: return the full posix path (not basename - that would lose uniqueness)
-        // This case should never happen in practice if repoPath is correct
-        console.warn("toNodeId fallback for:", abs, "| posixRepoPath:", posixRepoPath);
+        console.warn("[analyzer] toNodeId fallback (unexpected):", abs, "| posixRepoPath:", posixRepoPath);
         return posixAbs;
     };
 
-    // Sanity check log - verify toNodeId works before processing any files
     console.log("[analyzer] repoPath:", repoPath);
     console.log("[analyzer] posixRepoPath:", posixRepoPath);
-    console.log("[analyzer] toNodeId test:", toNodeId(path.join(repoPath, "apps", "web", "src", "page.tsx")));
-    // Expected output: apps/web/src/page.tsx
+    console.log("[analyzer] toNodeId test:", toNodeId(path.join(repoPath, "src", "index.js")));
+    // Expected: src/index.js
 
     await reportProgress({ phase: "indexing", percent: 4, detail: "Loading source files" });
 
     const project = new Project({ skipAddingFilesFromTsConfig: true });
 
-    // Load tsconfig files first (enables @/ alias resolution and proper module resolution)
+    // Load tsconfigs for TypeScript/Next.js repos (enables @/ alias resolution)
     const tsconfigCandidates = [
         path.join(repoPath, "tsconfig.json"),
         path.join(repoPath, "apps", "web", "tsconfig.json"),
@@ -536,33 +566,34 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
         path.join(repoPath, "packages", "shared", "tsconfig.json"),
     ];
     const tsconfigPaths = tsconfigCandidates.filter(p => fs.existsSync(p));
-    console.log("[analyzer] tsconfig paths:", tsconfigPaths);
+    console.log("[analyzer] tsconfig paths found:", tsconfigPaths);
 
     for (const tc of tsconfigPaths) {
         try {
-            // Use addSourceFilesFromTsConfig but then filter out node_modules
             const before = project.getSourceFiles().length;
             project.addSourceFilesFromTsConfig(tc);
-            console.log(`[analyzer] tsconfig ${path.basename(path.dirname(tc))} added ${project.getSourceFiles().length - before} files`);
+            console.log(`[analyzer] loaded ${project.getSourceFiles().length - before} files from ${path.basename(path.dirname(tc))}/tsconfig.json`);
         } catch (e) {
             console.warn("[analyzer] failed to load tsconfig:", tc, e);
         }
     }
 
-    // If tsconfigs loaded nothing useful, fall back to glob
+    // Fallback glob for repos without tsconfig (plain JS, CommonJS Express, etc.)
     const usefulFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath()));
     if (usefulFiles.length === 0) {
-        console.log("[analyzer] tsconfig fallback: using glob");
+        console.log("[analyzer] no tsconfig found or empty — using glob fallback");
         project.addSourceFilesAtPaths([
             `${posixRepoPath}/**/*.ts`,
             `${posixRepoPath}/**/*.tsx`,
             `${posixRepoPath}/**/*.js`,
             `${posixRepoPath}/**/*.jsx`,
+            `${posixRepoPath}/**/*.mjs`,
+            `${posixRepoPath}/**/*.cjs`,
         ]);
     }
 
-    console.log("[analyzer] source files after loading:", project.getSourceFiles().length);
-    console.log("[analyzer] source files after ignoring dirs:", project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath())).length);
+    const totalSourceFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath())).length;
+    console.log("[analyzer] ts-morph source files (excl. ignored dirs):", totalSourceFiles);
 
     await reportProgress({ phase: "indexing", percent: 8, detail: "Scanning repository" });
 
@@ -618,7 +649,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
         edges.push(edge);
     };
 
-    // Catalog all walkFiles nodes first (gives us snippets for non-TS files too)
+    // Step 1: Catalog all files from walkFiles (registers nodes with snippets)
     const fileStep = getProgressStep(allFiles.length);
     for (let i = 0; i < allFiles.length; i++) {
         const filePath = allFiles[i];
@@ -633,16 +664,15 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             ...(determinePackageRoot(filePath, posixRepoPath) ? { packageRoot: determinePackageRoot(filePath, posixRepoPath)! } : {}),
         });
         if (i % fileStep === 0 || i === allFiles.length - 1) {
-            await reportProgress({ phase: "cataloging", current: i + 1, total: allFiles.length, percent: computePercent(10, 40, i + 1, allFiles.length), detail: `${i + 1}/${allFiles.length} files` });
+            await reportProgress({ phase: "cataloging", current: i + 1, total: allFiles.length, percent: computePercent(10, 40, i + 1, allFiles.length), detail: `${i + 1}/${allFiles.length} files cataloged` });
         }
     }
 
-    // Process TS/JS files via ts-morph for accurate import resolution
+    // Step 2: Process TS/JS files via ts-morph (accurate import resolution for TypeScript)
     const sourceFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath()));
-    console.log("[analyzer] processing", sourceFiles.length, "ts-morph source files");
+    console.log("[analyzer] processing", sourceFiles.length, "source files via ts-morph");
 
-    // Track which files ts-morph handles so regex pass skips them
-    const tsHandledIds = new Set<string>();
+    const tsHandledIds = new Set<string>(); // track which files ts-morph handles
 
     const sourceStep = getProgressStep(sourceFiles.length);
     for (let i = 0; i < sourceFiles.length; i++) {
@@ -654,7 +684,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
         const nodeId = toNodeId(filePath);
         tsHandledIds.add(nodeId);
 
-        // Upsert node with better snippet from ts-morph
+        // Upsert node — ts-morph gives better snippet quality
         const snippet = buildCodeSnippet(sf);
         addNode({
             id: nodeId,
@@ -664,7 +694,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             ...(determinePackageRoot(filePath, posixRepoPath) ? { packageRoot: determinePackageRoot(filePath, posixRepoPath)! } : {}),
         }, true);
 
-        // Process import declarations
+        // Process ES module import declarations
         sf.getImportDeclarations().forEach(importDecl => {
             const spec = importDecl.getModuleSpecifierValue();
             let target = importDecl.getModuleSpecifierSourceFile() ?? null;
@@ -693,19 +723,22 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             addEdge({ source: nodeId, target: toNodeId(targetPath), label: "imports" });
         });
 
-        // Process require() calls
+        // Process CommonJS require() calls
         sf.getDescendantsOfKind(SyntaxKind.CallExpression).forEach(call => {
             const expr = call.getExpression();
             if (expr.getKind() === SyntaxKind.Identifier && expr.getText() === "require") {
                 const arg = call.getArguments()[0];
                 if (!arg || arg.getKind() !== SyntaxKind.StringLiteral) return;
                 const spec = arg.getText().replace(/['"`]/g, "");
+
                 let target = null;
-                if (spec.startsWith(".")) target = resolveRelativeSourceFile(project, sf, spec);
-                else {
+                if (spec.startsWith(".")) {
+                    target = resolveRelativeSourceFile(project, sf, spec);
+                } else {
                     const resolved = resolveNonRelativeModule(spec, filePath, repoPath, fileIndex);
                     if (resolved) target = project.getSourceFile(resolved) ?? null;
                 }
+
                 if (!target) {
                     const base = spec.split("/")[0];
                     if (base && knownNpmDeps.has(base)) {
@@ -731,7 +764,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             }
         });
 
-        // Detect storage usage
+        // Detect Prisma / mongoose storage usage
         sf.getDescendantsOfKind(SyntaxKind.Identifier).forEach(id => {
             if (["Schema", "model", "PrismaClient"].includes(id.getText())) {
                 addNode({ id: "database-layer", label: "Database/Storage", type: "storage" });
@@ -740,18 +773,22 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
         });
 
         if (i % sourceStep === 0 || i === sourceFiles.length - 1) {
-            await reportProgress({ phase: "parsing-ts", current: i + 1, total: sourceFiles.length, percent: computePercent(40, 70, i + 1, sourceFiles.length), detail: `${i + 1}/${sourceFiles.length} TS/JS files` });
+            await reportProgress({ phase: "parsing-ts", current: i + 1, total: sourceFiles.length, percent: computePercent(40, 70, i + 1, sourceFiles.length), detail: `${i + 1}/${sourceFiles.length} TS/JS files via ts-morph` });
         }
     }
 
-    // Regex pass ONLY for JS/TS files not already handled by ts-morph
-    const jsTsExts = new Set([".ts", ".tsx", ".js", ".jsx"]);
+    // Step 3: Regex pass for JS/TS files NOT handled by ts-morph.
+    // KEY FIX: uses ALL_EXTENSIONS_INCLUDING_JS so require('./routes/auth') finds auth.js
+    // This is the main fix for CommonJS/Express repos with plain .js files.
+    const jsTsExts = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
     const regexFiles = allFiles.filter(fp => {
         if (!fp) return false;
         const ext = path.extname(fp).toLowerCase();
         if (!jsTsExts.has(ext)) return false;
-        return !tsHandledIds.has(toNodeId(fp)); // skip files ts-morph already processed
+        return !tsHandledIds.has(toNodeId(fp)); // skip files already processed by ts-morph
     });
+
+    console.log("[analyzer] regex pass will process:", regexFiles.length, "files (not handled by ts-morph)");
 
     const importRegex = /(?:import\s+(?:[^'";]+?)\s+from\s+|import\s+['"])([^'"\)]+)['"]/g;
     const requireRegex = /require\(\s*['"]([^'"]+)['"]\s*\)/g;
@@ -768,11 +805,17 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             let target: string | null = null;
             if (spec.startsWith(".")) {
                 const base = path.resolve(path.dirname(filePath), spec);
-                target = resolvePathCandidates(base, ALL_EXTENSIONS, fileIndex.fileSet, ["index"]);
+                // THE KEY FIX: use ALL_EXTENSIONS_INCLUDING_JS here
+                // Previously used ALL_EXTENSIONS which excluded .js/.ts entirely,
+                // so require('./routes/auth') never resolved to auth.js
+                target = resolvePathCandidates(base, ALL_EXTENSIONS_INCLUDING_JS, fileIndex.fileSet, ["index"]);
             } else {
+                // For non-relative requires like require('express'), check if it's internal first
                 target = resolveNonRelativeModule(spec, filePath, repoPath, fileIndex);
             }
+
             if (!target || target === toPosix(path.resolve(filePath))) {
+                // Not an internal file — check if it's a known npm package
                 const base = spec.split("/")[0];
                 if (base && knownNpmDeps.has(base)) {
                     addNode({ id: `npm:${base}`, label: base, type: "npm-package", packageRoot: "npm-dependencies" });
@@ -795,7 +838,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
         }
     }
 
-    // Non-JS language parsers
+    // Step 4: Non-JS language dependency parsers (Python, Go, Rust, etc.)
     const depFiles = allFiles.filter(fp => {
         if (!fp) return false;
         const ext = path.extname(fp).toLowerCase();
@@ -818,14 +861,21 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
             addEdge({ source: nodeId, target: toNodeId(target), label: ref.label });
         }
         if (i % depStep === 0 || i === depFiles.length - 1) {
-            await reportProgress({ phase: "parsing-deps", current: i + 1, total: depFiles.length, percent: computePercent(80, 95, i + 1, depFiles.length), detail: `${i + 1}/${depFiles.length} files` });
+            await reportProgress({ phase: "parsing-deps", current: i + 1, total: depFiles.length, percent: computePercent(80, 95, i + 1, depFiles.length), detail: `${i + 1}/${depFiles.length} non-JS files` });
         }
     }
 
-    console.log("[analyzer] Final node count:", nodeMap.size);
-    console.log("[analyzer] Final edge count:", edges.length);
-    if (edges.length > 0) console.log("[analyzer] Sample edges:", edges.slice(0, 5));
-    else console.warn("[analyzer] WARNING: 0 edges found. Check console logs above for tsconfig/source file loading.");
+    // Final summary logs
+    console.log("[analyzer] ✓ Final node count:", nodeMap.size);
+    console.log("[analyzer] ✓ Final edge count:", edges.length);
+    if (edges.length > 0) {
+        console.log("[analyzer] Sample edges:", edges.slice(0, 5).map(e => `${e.source} → ${e.target}`));
+    } else {
+        console.warn("[analyzer] ⚠ WARNING: 0 edges produced. Common causes:");
+        console.warn("  1. Repo uses require() without extensions and resolvePathCandidates couldn't find the files");
+        console.warn("  2. Drive letter casing mismatch (check toPosix output above)");
+        console.warn("  3. ts-morph loaded 0 files (check tsconfig logs above)");
+    }
 
     await reportProgress({ phase: "finalizing", percent: 100, detail: "Graph ready" });
     return { nodes: Array.from(nodeMap.values()), edges };
