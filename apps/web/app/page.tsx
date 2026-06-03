@@ -55,7 +55,7 @@ export default function RepoLensDashboard() {
       const data = await res.json();
 
       if (data.result) {
-        setStatusText(data.cached ? "Loaded from cache." : "Analysis complete.");
+        setStatusText("Analysis complete.");
         setStatusTone("success");
         setGraphData(data.result);
         setLoading(false);
