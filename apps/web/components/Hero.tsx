@@ -12,8 +12,12 @@ export default function Hero() {
           <Sparkles className="h-4 w-4" /> Repo intelligence layer
         </div>
 
-        <h1 className="mt-6 text-5xl md:text-6xl leading-tight text-slate-900 display-font">
-          Your repository architecture, simplified.
+        <div className="mt-4 text-xs font-medium uppercase tracking-[0.26em] text-slate-500">
+          Scan faster, review less, understand more.
+        </div>
+
+        <h1 className="mt-6 text-5xl md:text-6xl leading-tight text-slate-900 display-font max-w-[12ch]">
+          Your <span className="text-sky-700">repository architecture</span>, simplified.
         </h1>
 
         <p className="mt-6 text-lg text-slate-700 max-w-[64ch]">
