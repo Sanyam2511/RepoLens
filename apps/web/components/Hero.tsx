@@ -53,15 +53,15 @@ export default function Hero() {
             ))}
           </div>
           <div className="text-sm text-slate-600">
-            Used by teams to onboard faster and reduce review time.
+            Used by teams to onboard faster, reduce review time, and spot risky couplings early.
           </div>
         </div>
       </div>
 
-        <div className="flex items-center justify-center">
-          <div className="relative w-full max-w-md">
-            <div className="rounded-[38px] bg-white p-6 shadow-[0_26px_60px_rgba(15,23,42,0.16)]">
-              <div className="h-[360px] rounded-[30px] bg-gradient-to-br from-sky-50 via-white to-amber-50 flex items-center justify-center">
+      <div className="flex items-center justify-center">
+        <div className="relative w-full max-w-md">
+          <div className="rounded-[38px] bg-white p-6 shadow-[0_26px_60px_rgba(15,23,42,0.16)] ring-1 ring-slate-200/70">
+            <div className="h-[360px] rounded-[30px] bg-gradient-to-br from-sky-50 via-white to-amber-50 flex items-center justify-center">
               <svg width="320" height="260" viewBox="0 0 320 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="heroTitle heroDesc">
                 <title id="heroTitle">Repository map (static)</title>
                 <desc id="heroDesc">Static illustration of module groups with clear import connections</desc>
@@ -103,7 +103,7 @@ export default function Hero() {
               1,420 nodes mapped
             </div>
             <div className="rounded-2xl bg-white/95 px-4 py-3 text-xs text-slate-600 shadow">
-              38% faster reviews
+              Less review friction
             </div>
           </div>
         </div>
