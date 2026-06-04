@@ -8,8 +8,8 @@ export default function Hero() {
   return (
     <section className="mx-auto w-[min(1200px,94vw)] grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-12 items-center py-16">
       <div className="lg:pr-8">
-        <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
-          <Sparkles className="h-4 w-4" /> Repo intelligence platform
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm">
+          <Sparkles className="h-4 w-4" /> Repo intelligence layer
         </div>
 
         <h1 className="mt-6 text-5xl md:text-6xl leading-tight text-slate-900 display-font">
@@ -22,7 +22,7 @@ export default function Hero() {
         </p>
 
         <div className="mt-7 flex flex-wrap items-center gap-4 text-sm">
-          <Link href="#analyze" className="inline-flex items-center gap-2 font-semibold text-slate-900 underline underline-offset-4">
+          <Link href="#analyze" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-800">
             Start analysis <ArrowRight className="h-4 w-4" />
           </Link>
           <Link href="/history" className="font-medium text-slate-600 underline underline-offset-4">
