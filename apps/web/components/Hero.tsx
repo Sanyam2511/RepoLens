@@ -29,16 +29,16 @@ export default function Hero() {
           <Link href="#analyze" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-800">
             Start analysis <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link href="/history" className="font-medium text-slate-600 underline underline-offset-4">
+          <Link href="/history" className="font-medium text-slate-600 underline underline-offset-4 decoration-slate-300 decoration-2 underline-offset-[6px] hover:text-slate-900">
             View history
           </Link>
         </div>
 
-        <div className="mt-6 rounded-[26px] bg-white/90 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-          <div className="flex items-center gap-3 rounded-[20px] bg-white px-4 py-3">
+        <div className="mt-6 rounded-[26px] bg-white/95 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/70">
+          <div className="flex items-center gap-3 rounded-[20px] border border-slate-100 bg-white px-4 py-3">
             <Search className="h-4 w-4 text-slate-400" />
-            <div className="flex-1 text-sm text-slate-500">Paste a public GitHub URL to preview the map</div>
-            <Link href="#analyze" className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-900">
+            <div className="flex-1 text-sm text-slate-500">Paste a public GitHub URL to preview the architecture map</div>
+            <Link href="#analyze" className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-sky-900">
               Analyze
             </Link>
           </div>
