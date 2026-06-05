@@ -2,110 +2,214 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, Search, Sparkles } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
+
+function edgeDown(sx: number, sy: number, tx: number, ty: number, color: string) {
+  const midY = sy + (ty - sy) / 2;
+  return (
+    <path
+      d={`M ${sx} ${sy} V ${midY} H ${tx} V ${ty}`}
+      fill="none"
+      stroke={color}
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      markerEnd="url(#heroArrow)"
+    />
+  );
+}
+
+function GraphNode({
+  x, y, w, h, label, sub, color,
+}: { x: number; y: number; w: number; h: number; label: string; sub: string; color: string }) {
+  const cx = x + w / 2;
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx="8" fill={`${color}14`} stroke={color} strokeWidth="1.5" />
+      <rect x={x} y={y} width={w} height="3" rx="1" fill={color} />
+      <text x={cx} y={y + 20} textAnchor="middle" fill="#0F172A" fontSize="10" fontWeight="600" fontFamily="var(--font-sans, sans-serif)">{label}</text>
+      <text x={cx} y={y + 33} textAnchor="middle" fill="#94A3B8" fontSize="8" fontFamily="var(--font-mono, monospace)">{sub}</text>
+      <circle cx={cx} cy={y} r="2.5" fill={color} stroke="#fff" strokeWidth="1" />
+      <circle cx={cx} cy={y + h} r="2.5" fill={color} stroke="#fff" strokeWidth="1" />
+    </g>
+  );
+}
+
+function HeroSchematic() {
+  const W = 280;
+  const H = 220;
+  const api = { x: 20, y: 16, w: 90, h: 46, color: "#7C3AED", label: "API", sub: "routes/" };
+  const core = { x: 170, y: 16, w: 90, h: 46, color: "#6366F1", label: "Core", sub: "lib/utils" };
+  const router = { x: 95, y: 88, w: 90, h: 46, color: "#059669", label: "Router", sub: "middleware" };
+  const storage = { x: 95, y: 160, w: 90, h: 46, color: "#0891B2", label: "Storage", sub: "db/client" };
+
+  const port = (n: typeof api, side: "top" | "bottom") => ({
+    x: n.x + n.w / 2,
+    y: side === "top" ? n.y : n.y + n.h,
+  });
+
+  const apiBot = port(api, "bottom");
+  const coreBot = port(core, "bottom");
+  const routerTop = port(router, "top");
+  const routerBot = port(router, "bottom");
+  const storageTop = port(storage, "top");
+
+  return (
+    <svg className="h-full w-full" viewBox={`0 0 ${W} ${H}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="heroTitle heroDesc">
+      <title id="heroTitle">Repository dependency graph</title>
+      <desc id="heroDesc">Directed import edges from API and Core through Router to Storage</desc>
+      <defs>
+        <marker id="heroArrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="#94A3B8" />
+        </marker>
+      </defs>
+      <rect x="8" y="6" width={W - 16} height={H - 12} rx="10" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="5 4" />
+      {edgeDown(apiBot.x, apiBot.y, routerTop.x - 14, routerTop.y, "#7C3AED")}
+      {edgeDown(coreBot.x, coreBot.y, routerTop.x + 14, routerTop.y, "#6366F1")}
+      {edgeDown(routerBot.x, routerBot.y, storageTop.x, storageTop.y, "#0891B2")}
+      <path d={`M ${api.x + api.w} ${api.y + 23} H ${core.x - 6}`} fill="none" stroke="#CBD5E1" strokeWidth="1" strokeDasharray="3 3" markerEnd="url(#heroArrow)" />
+      <GraphNode {...api} />
+      <GraphNode {...core} />
+      <GraphNode {...router} />
+      <GraphNode {...storage} />
+    </svg>
+  );
+}
+
+function FloatPanel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`compact-card z-20 p-3 ${className ?? ""}`}>
+      {children}
+    </div>
+  );
+}
 
 export default function Hero() {
   return (
-    <section className="mx-auto w-[min(1200px,94vw)] grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-12 items-center py-16">
-      <div className="lg:pr-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm">
-          <Sparkles className="h-4 w-4" /> Repo intelligence layer
-        </div>
+    <section className="dot-grid-bg relative overflow-hidden">
+      <div className="content-grid relative pt-6 pb-10 md:pt-8 md:pb-14">
+        {/* Centered headline — Monity-style hub */}
+        <div className="relative z-10 mx-auto max-w-2xl text-center">
+          <div className="badge-chip badge-accent inline-flex items-center gap-2">
+            Repo intelligence layer
+          </div>
 
-        <div className="mt-4 text-xs font-medium uppercase tracking-[0.26em] text-slate-500">
-          Scan faster, review less, understand more.
-        </div>
+          <h1 className="mt-3 hero-heading text-[clamp(2rem,5vw,3rem)]">
+            Your repository architecture,
+            <br />
+            <span className="text-[var(--color-text-tertiary)]">mapped as a graph.</span>
+          </h1>
 
-        <h1 className="mt-6 text-5xl md:text-6xl leading-tight text-slate-900 display-font max-w-[12ch]">
-          Your <span className="text-sky-700">repository architecture</span>, simplified.
-        </h1>
+          <p className="mt-4 mx-auto max-w-xl text-[var(--color-text-secondary)]">
+            RepoLens maps imports, API calls, and storage dependencies into a live architecture graph.
+          </p>
 
-        <p className="mt-6 text-lg text-slate-700 max-w-[64ch]">
-          RepoLens maps imports, API calls, and storage dependencies into a live architecture graph. Use it to onboard
-          faster, spot coupling early, and keep history of every scan.
-        </p>
-
-        <div className="mt-7 flex flex-wrap items-center gap-4 text-sm">
-          <Link href="#analyze" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-800">
-            Start analysis <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link href="/history" className="font-medium text-slate-600 underline underline-offset-4 decoration-slate-300 decoration-2 underline-offset-[6px] hover:text-slate-900">
-            View history
-          </Link>
-        </div>
-
-        <div className="mt-6 rounded-[26px] bg-white/95 p-2 shadow-[0_18px_40px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/70">
-          <div className="flex items-center gap-3 rounded-[20px] border border-slate-100 bg-white px-4 py-3">
-            <Search className="h-4 w-4 text-slate-400" />
-            <div className="flex-1 text-sm text-slate-500">Paste a public GitHub URL to preview the architecture map</div>
-            <Link href="#analyze" className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-sky-900">
-              Analyze
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <Link href="#analyze" className="btn-primary">
+              Start analysis <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/history" className="btn-ghost">
+              View history
             </Link>
           </div>
+
+          <div className="mt-5 mx-auto max-w-lg compact-card p-1.5">
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] px-3 py-2.5">
+              <Search className="h-4 w-4 shrink-0 text-[var(--color-text-tertiary)]" />
+              <span className="flex-1 truncate text-left data-mono text-[var(--color-text-tertiary)]">
+                https://github.com/org/repo
+              </span>
+              <Link href="#analyze" className="badge-chip badge-accent shrink-0">
+                Analyze
+              </Link>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-4">
-          <div className="flex -space-x-3">
-            {["AL", "VP", "RM", "KS"].map((initials) => (
-              <div key={initials} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-xs font-semibold text-white">
-                {initials}
+        {/* Schematic arena — floating panels orbit the center graph */}
+        <div className="relative mx-auto mt-6 h-[300px] w-full max-w-3xl md:mt-8 md:h-[340px]">
+          {/* Connector traces */}
+          <svg className="pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 768 340" preserveAspectRatio="xMidYMid meet" fill="none" aria-hidden>
+            <defs>
+              <marker id="traceArrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#CBD5E1" />
+              </marker>
+            </defs>
+            <path d="M 130 52 H 280 V 170 H 384" stroke="#CBD5E1" strokeWidth="1.25" strokeDasharray="5 4" markerEnd="url(#traceArrow)" />
+            <path d="M 638 52 H 488 V 170 H 384" stroke="#CBD5E1" strokeWidth="1.25" strokeDasharray="5 4" markerEnd="url(#traceArrow)" />
+            <path d="M 130 288 H 280 V 200 H 384" stroke="#CBD5E1" strokeWidth="1.25" strokeDasharray="5 4" markerEnd="url(#traceArrow)" />
+            <path d="M 638 288 H 488 V 200 H 384" stroke="#CBD5E1" strokeWidth="1.25" strokeDasharray="5 4" markerEnd="url(#traceArrow)" />
+            <rect x="200" y="100" width="368" height="140" rx="16" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="6 4" opacity="0.7" />
+          </svg>
+
+          {/* Top-left */}
+          <FloatPanel className="absolute left-0 top-0 hidden w-[140px] md:block lg:w-[155px]">
+            <div className="micro-label mb-1.5">File tree</div>
+            <div className="space-y-0.5 data-mono-dense text-[var(--color-text-secondary)]">
+              <div className="text-[var(--color-text-tertiary)]">src/</div>
+              <div className="pl-2">api/routes.ts</div>
+              <div className="pl-2 text-[var(--color-accent)]">lib/utils.ts</div>
+              <div className="pl-2">db/client.ts</div>
+            </div>
+          </FloatPanel>
+
+          {/* Top-right */}
+          <FloatPanel className="absolute right-0 top-0 hidden w-[140px] md:block lg:w-[155px]">
+            <div className="micro-label mb-1.5">Scan meta</div>
+            <div className="space-y-1">
+              <div className="flex justify-between gap-1">
+                <span className="micro-label !text-[0.6rem]">ID</span>
+                <span className="data-mono-dense text-[var(--color-text-primary)]">a3f9c2</span>
               </div>
-            ))}
-          </div>
-          <div className="text-sm text-slate-600">
-            Used by teams to onboard faster, reduce review time, and spot risky couplings early.
-          </div>
-        </div>
-      </div>
+              <div className="flex justify-between gap-1">
+                <span className="micro-label !text-[0.6rem]">Status</span>
+                <span className="badge-chip badge-healthy !py-0.5 !text-[0.6rem]">OK</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                <span className="micro-label !text-[0.6rem]">Depth</span>
+                <span className="data-mono-dense text-[var(--color-text-primary)]">4</span>
+              </div>
+            </div>
+          </FloatPanel>
 
-      <div className="flex items-center justify-center">
-        <div className="relative w-full max-w-md">
-          <div className="rounded-[38px] bg-white p-6 shadow-[0_26px_60px_rgba(15,23,42,0.16)] ring-1 ring-slate-200/70">
-            <div className="h-[360px] rounded-[30px] bg-gradient-to-br from-sky-50 via-white to-amber-50 flex items-center justify-center">
-              <svg width="320" height="260" viewBox="0 0 320 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="heroTitle heroDesc">
-                <title id="heroTitle">Repository map (static)</title>
-                <desc id="heroDesc">Static illustration of module groups with clear import connections</desc>
-                <rect width="320" height="260" rx="24" fill="#F8FAFC" />
-                <rect x="12" y="18" width="296" height="224" rx="20" fill="#FFFFFF" opacity="0.8" />
-
-                {/* Module cards (static) */}
-                <rect x="36" y="36" width="116" height="68" rx="12" fill="#E0F2FE" />
-                <text x="94" y="58" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">Core</text>
-
-                <rect x="168" y="36" width="116" height="48" rx="12" fill="#FFE8B5" />
-                <text x="226" y="52" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">API</text>
-
-                <rect x="36" y="132" width="116" height="56" rx="12" fill="#E0E7FF" />
-                <text x="94" y="156" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">Utils</text>
-
-                <rect x="168" y="118" width="116" height="84" rx="12" fill="#DCFCE7" />
-                <text x="226" y="156" textAnchor="middle" className="fill-slate-800" fontSize="11" fontWeight="600">Services</text>
-
-                {/* Static connections between module centers */}
-                <path d="M94 70 C140 70 180 62 226 60" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.95" />
-                <path d="M94 160 C140 160 180 160 226 160" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.95" />
-                <path d="M94 136 C130 136 180 148 226 160" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.9" />
-
-                {/* Endpoint markers (static) */}
-                <circle cx="94" cy="70" r="6" fill="#0EA5E9" stroke="#FFFFFF" strokeWidth="1" />
-                <circle cx="226" cy="60" r="6" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="1" />
-                <circle cx="94" cy="160" r="6" fill="#22C55E" stroke="#FFFFFF" strokeWidth="1" />
-                <circle cx="226" cy="160" r="6" fill="#A78BFA" stroke="#FFFFFF" strokeWidth="1" />
-
-                {/* subtle inner highlight for depth */}
-                <rect x="28" y="28" width="264" height="204" rx="16" fill="none" stroke="#EEF2FF" strokeWidth="1" opacity="0.6" />
-              </svg>
+          {/* Center graph */}
+          <div className="absolute left-1/2 top-1/2 z-10 w-[min(100%,300px)] -translate-x-1/2 -translate-y-1/2 surface-card p-3 md:w-[300px]">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="micro-label">Dependency graph</span>
+              <span className="data-mono-dense text-[var(--color-text-tertiary)]">import →</span>
+            </div>
+            <div className="h-[200px] rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] dot-grid-bg md:h-[220px]">
+              <HeroSchematic />
             </div>
           </div>
 
-          <div className="absolute -bottom-8 left-6 right-6 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-white/95 px-4 py-3 text-xs text-slate-600 shadow">
-              1,420 nodes mapped
+          {/* Bottom-left */}
+          <FloatPanel className="absolute bottom-0 left-0 hidden w-[148px] md:block lg:w-[162px]">
+            <div className="micro-label mb-1.5">Import chain</div>
+            <div className="space-y-0.5 data-mono-dense text-[var(--color-text-secondary)]">
+              <div className="flex items-center gap-1">
+                <span className="text-[var(--color-node-api)]">routes</span>
+                <span className="text-[var(--color-text-tertiary)]">→</span>
+                <span>middleware</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span>middleware</span>
+                <span className="text-[var(--color-text-tertiary)]">→</span>
+                <span className="text-[var(--color-node-storage)]">db/client</span>
+              </div>
             </div>
-            <div className="rounded-2xl bg-white/95 px-4 py-3 text-xs text-slate-600 shadow">
-              Less review friction
+          </FloatPanel>
+
+          {/* Bottom-right */}
+          <FloatPanel className="absolute bottom-0 right-0 hidden w-[148px] md:block lg:w-[162px]">
+            <div className="micro-label mb-1.5">Coupling signal</div>
+            <div className="badge-chip badge-hotspot mb-1 w-fit !text-[0.6rem]">Hotspot</div>
+            <div className="data-mono-dense font-semibold text-[var(--color-text-primary)]">utils.ts</div>
+            <div className="mt-0.5 flex gap-2 data-mono-dense text-[var(--color-text-tertiary)]">
+              <span>in <strong className="text-[var(--color-text-primary)]">12</strong></span>
+              <span>out <strong className="text-[var(--color-text-primary)]">4</strong></span>
             </div>
-          </div>
+          </FloatPanel>
         </div>
       </div>
     </section>
