@@ -36,7 +36,6 @@ export default function HistoryTimeline({ repo }: { repo?: string }) {
         const payload = await res.json();
         const data: any[] = Array.isArray(payload.history) ? payload.history : [];
         if (!mounted) return;
-        // map to Scan shape
         const mapped = data.map((item) => ({
           id: item.id,
           date: item.createdAt || item.date,
@@ -57,7 +56,6 @@ export default function HistoryTimeline({ repo }: { repo?: string }) {
     };
   }, [repo]);
 
-  // derive repo list and selected repo
   const repos = Array.from(new Set((scans || []).map((s) => s.repoUrl).filter(Boolean))) as string[];
   const [selectedRepo, setSelectedRepo] = useState<string | null>(() => (repo ? repo : repos[0] ?? null));
 
@@ -80,13 +78,13 @@ export default function HistoryTimeline({ repo }: { repo?: string }) {
 
   if (!scans) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 text-center text-slate-600">Loading scan history…</div>
+      <div className="compact-card p-6 text-center text-[var(--color-text-secondary)]">Loading scan history…</div>
     );
   }
 
   if (scans.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 text-center text-slate-600">No scans available</div>
+      <div className="compact-card p-6 text-center text-[var(--color-text-secondary)]">No scans available</div>
     );
   }
 
@@ -94,14 +92,14 @@ export default function HistoryTimeline({ repo }: { repo?: string }) {
 
   if (scansForRepo.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white/80 p-6">
+      <div className="compact-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-900">Scan history</div>
-            <div className="text-xs text-slate-500">No scans for selected repository</div>
+            <div className="text-sm font-semibold text-[var(--color-text-primary)]">Scan history</div>
+            <div className="text-xs text-[var(--color-text-tertiary)]">No scans for selected repository</div>
           </div>
           {repos.length > 1 ? (
-            <select value={selectedRepo ?? undefined} onChange={(e) => setSelectedRepo(e.target.value)} className="text-sm border rounded px-2 py-1">
+            <select value={selectedRepo ?? undefined} onChange={(e) => setSelectedRepo(e.target.value)} className="input-field text-sm py-2">
               {repos.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
@@ -113,37 +111,42 @@ export default function HistoryTimeline({ repo }: { repo?: string }) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/80 p-6">
+    <div className="compact-card p-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-900">Scan history</div>
-          <div className="text-xs text-slate-500">Showing recent scans for {selectedRepo ?? 'your repos'}</div>
+          <div className="text-sm font-semibold text-[var(--color-text-primary)]">Scan history</div>
+          <div className="data-mono-dense text-[var(--color-text-tertiary)]">
+            Showing recent scans for {selectedRepo ?? "your repos"}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {repos.length > 0 ? (
-            <select value={selectedRepo ?? undefined} onChange={(e) => setSelectedRepo(e.target.value)} className="text-sm border rounded px-2 py-1">
+            <select value={selectedRepo ?? undefined} onChange={(e) => setSelectedRepo(e.target.value)} className="input-field text-sm py-2">
               <option value="">All repos</option>
               {repos.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
           ) : null}
-          <Link href="/history" className="text-sm font-semibold text-slate-700 underline">View full timeline</Link>
+          <Link href="/history" className="btn-ghost text-sm py-2 px-3">View full timeline</Link>
         </div>
       </div>
 
       <div className="mt-6 relative">
-        <div className="h-1 w-full rounded bg-slate-100" />
+        <div className="h-px w-full bg-[var(--color-border-subtle)]" />
         <div className="absolute left-0 right-0 top-0 mt-[-12px] flex items-center justify-between gap-2">
           {scansForRepo.slice(0, 8).map((scan) => (
             <button key={scan.id} onClick={() => setSelectedId(scan.id)} className="flex-1 flex flex-col items-center focus:outline-none">
               <div className={`h-6 w-6 rounded-full border-2 ${
-                scan.changeType === "improved" ? "border-emerald-500 bg-emerald-50" : scan.changeType === "regressed" ? "border-rose-500 bg-rose-50" : "border-slate-300 bg-white"
+                scan.changeType === "improved"
+                  ? "border-[var(--color-healthy)] bg-[var(--color-healthy-subtle)]"
+                  : scan.changeType === "regressed"
+                    ? "border-[var(--color-cycle)] bg-[var(--color-cycle-subtle)]"
+                    : "border-[var(--color-border-strong)] bg-[var(--color-bg-surface)]"
               }`} />
-              <div className="mt-2 w-28 rounded-xl border bg-white/90 p-2 text-center text-xs text-slate-700">
-                <div className="font-semibold">{scan.label}</div>
-                <div className="text-[12px] text-slate-500">{scan.nodes} nodes</div>
-                <div className="text-[12px] font-mono text-slate-900">{scan.score}</div>
+              <div className="mt-2 w-28 compact-card p-2 text-center">
+                <div className="data-mono-dense font-semibold text-[var(--color-text-primary)] truncate">{scan.label}</div>
+                <div className="data-mono-dense text-[var(--color-text-tertiary)]">{scan.nodes} nodes</div>
               </div>
             </button>
           ))}
