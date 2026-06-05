@@ -26,9 +26,6 @@ const NODE_WIDTH = 260;
 const NODE_HEIGHT = 130;
 const GRID_COLS = 4;
 
-// Gets the display filename and short relative path from a node ID.
-// Node IDs from the analyzer are already relative paths like "apps/web/src/page.tsx".
-// cleanPath is NOT needed — the analyzer's toNodeId already strips the temp prefix.
 const getDisplayName = (nodeId: string) => {
   const parts = nodeId.split("/");
   const filename = parts.pop() || nodeId;
@@ -36,9 +33,6 @@ const getDisplayName = (nodeId: string) => {
   return { filename, relativePath };
 };
 
-// Visual-only filter: hide config/asset nodes from the graph view.
-// These nodes may still exist in the data for edge resolution but
-// we don't want to show them as visual graph nodes.
 const IGNORED_EXTS = new Set([
   "svg", "ico", "png", "jpg", "jpeg", "css", "scss",
   "md", "mdx", "sql", "toml", "prisma", "lock",
@@ -57,10 +51,8 @@ const IGNORED_FILENAMES = new Set([
 ]);
 
 const shouldShowNode = (nodeId: string, nodeType: string): boolean => {
-  // Always show non-file nodes (npm-package, api-endpoint, storage, etc.)
   if (nodeType !== "file") return true;
   const filename = nodeId.split("/").pop()?.toLowerCase() ?? "";
-  // Always show package.json (it has npm link edges)
   if (filename === "package.json") return true;
   if (IGNORED_FILENAMES.has(filename)) return false;
   const ext = filename.includes(".") ? filename.split(".").pop()?.toLowerCase() : "";
@@ -90,22 +82,16 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
   const [searchQuery, setSearchQuery] = useState("");
   const [criticalPathOnly, setCriticalPathOnly] = useState(false);
 
-  // ─── CORE DATA PROCESSING ─────────────────────────────────────────────────
-  // Node IDs from the analyzer are already clean relative paths.
-  // We do NOT run cleanPath here — that was the source of the double-cleaning bug.
   const processedData = useMemo(() => {
     if (!graphData) return null;
 
-    // Step 1: Filter visual noise from nodes
     const visibleNodes = graphData.nodes.filter(n => shouldShowNode(n.id, n.type));
     const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
 
-    // Step 2: Only keep edges where both endpoints are visible
     const validEdges = graphData.edges.filter(
       e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target) && e.source !== e.target
     );
 
-    // Step 3: Compute degree maps
     const inDegree = new Map<string, number>();
     const outDegree = new Map<string, number>();
     const adjacency = new Map<string, string[]>();
@@ -125,7 +111,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       reverseAdjacency.get(e.target)?.push(e.source);
     });
 
-    // Step 4: Cycle detection
     const cyclicNodes = new Set<string>();
     const cyclicEdges = new Set<string>();
     const visited = new Set<string>();
@@ -150,7 +135,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
     visibleNodes.forEach(n => { if (!visited.has(n.id)) detectCycle(n.id, []); });
 
-    // Step 5: Categorize nodes using computed degrees
     const categorizedNodes = visibleNodes.map(n => ({
       ...n,
       inbound: inDegree.get(n.id) ?? 0,
@@ -163,12 +147,10 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     return { nodes: categorizedNodes, edges: validEdges, inDegree, outDegree, cyclicNodes, cyclicEdges, adjacency, reverseAdjacency };
   }, [graphData]);
 
-  // ─── LAYOUT ENGINE ────────────────────────────────────────────────────────
   const mapDataToCanvas = useCallback(() => {
     if (!processedData) return;
     const { nodes: pNodes, edges: pEdges, inDegree, outDegree, cyclicNodes, cyclicEdges } = processedData;
 
-    // Optionally filter to only connected nodes
     let visibleNodes = pNodes;
     if (criticalPathOnly) {
       visibleNodes = visibleNodes.filter(n =>
@@ -188,7 +170,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     const positionedNodes: Node<GraphNodeData>[] = [];
     let maxDagreY = 0;
 
-    // ── Dagre layout for connected subgraph ──
     if (connectedNodes.length > 0) {
       const g = new dagre.graphlib.Graph();
       g.setDefaultEdgeLabel(() => ({}));
@@ -203,7 +184,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         g.setEdge(e.source, e.target, { weight: cyclicEdges.has(`${e.source}->${e.target}`) ? 1 : 10 });
       });
 
-      // Virtual root to ensure tree starts from true entry points
       const hasInbound = new Set(edgesToRender.map(e => e.target));
       const entryNodes = connectedNodes.filter(n => !hasInbound.has(n.id));
       g.setNode("__ROOT__", { width: 1, height: 1 });
@@ -213,7 +193,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
       connectedNodes.forEach(n => {
         const pos = g.node(n.id);
-        if (!pos) return; // guard: dagre might not have placed it
+        if (!pos) return;
         const w = (inDegree.get(n.id) ?? 0) > 4 ? 300 : NODE_WIDTH;
         const { filename, relativePath } = getDisplayName(n.id);
         const ext = filename.includes(".") ? filename.split(".").pop() : "";
@@ -243,7 +223,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       });
     }
 
-    // ── Grid layout for isolated nodes (below the main graph) ──
     if (isolatedNodes.length > 0) {
       const startY = maxDagreY > 0 ? maxDagreY + 120 : 40;
       isolatedNodes.forEach((n, idx) => {
@@ -275,7 +254,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       });
     }
 
-    // ── Style edges ──
     const layoutedEdges: Edge[] = edgesToRender.map(edge => {
       const srcNode = visibleNodes.find(n => n.id === edge.source);
       const color = ROLE_COLORS[(srcNode?.category as NodeCategory) ?? "internal"]?.border ?? "#64748b";
@@ -301,7 +279,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
   useEffect(() => { mapDataToCanvas(); }, [mapDataToCanvas]);
 
-  // ─── FOCUS HIGHLIGHT ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!processedData) return;
     setNodes(nds => nds.map(n => {
@@ -313,7 +290,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     }));
     setEdges(eds => eds.map(e => {
       if (!focusedNodeId) return { ...e, style: { ...e.style, opacity: 0.6, strokeWidth: 1.5 } };
-      if (e.source === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#3B82F6" }, zIndex: 10 };
+      if (e.source === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#6366F1" }, zIndex: 10 };
       if (e.target === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#10B981" }, zIndex: 10 };
       return { ...e, style: { ...e.style, opacity: 0.05, strokeWidth: 1 }, zIndex: 0 };
     }));
@@ -336,51 +313,52 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     if (target) handleNodeClick(e as any, target);
   };
 
-  // ─── METRICS ──────────────────────────────────────────────────────────────
   const hotspotCount = useMemo(
     () => Array.from(processedData?.inDegree.values() ?? []).filter(v => v > 4).length,
     [processedData]
   );
 
   return (
-    <div className="relative w-full h-full bg-slate-50 overflow-hidden rounded-[28px]">
-      {/* ── Right panel ── */}
+    <div className="relative w-full h-full bg-[var(--color-bg-base)] overflow-hidden rounded-xl dot-grid-bg">
+      {/* Right panel */}
       <div className="absolute top-4 right-4 z-10 w-72 flex flex-col gap-4">
-        <form onSubmit={handleSearch} className="bg-white rounded-xl shadow-lg border border-slate-200 p-2 flex items-center gap-2">
-          <Search className="w-4 h-4 text-slate-400 ml-2" />
+        <form onSubmit={handleSearch} className="compact-card p-2 flex items-center gap-2 bg-[var(--color-bg-surface)]">
+          <Search className="w-4 h-4 text-[var(--color-text-tertiary)] ml-2" />
           <input
-            type="text" placeholder="Search a file..."
-            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            className="flex-1 outline-none text-sm bg-transparent"
+            type="text"
+            placeholder="Search a file..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="flex-1 outline-none data-mono bg-transparent text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)]"
           />
         </form>
 
-        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Graph Metrics</div>
-          <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-            <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
-              <div className="font-black text-slate-800">{nodes.length}</div>
-              <div className="text-[10px] uppercase text-slate-500">Nodes</div>
+        <div className="compact-card p-4 bg-[var(--color-bg-surface)] border-r border-[var(--color-border-subtle)]">
+          <div className="micro-label mb-3">Graph Metrics</div>
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <div className="metric-card">
+              <div className="micro-label">Nodes</div>
+              <div className="data-mono font-semibold text-[var(--color-text-primary)]">{nodes.length}</div>
             </div>
-            <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
-              <div className="font-black text-slate-800">{edges.length}</div>
-              <div className="text-[10px] uppercase text-slate-500">Edges</div>
+            <div className="metric-card">
+              <div className="micro-label">Edges</div>
+              <div className="data-mono font-semibold text-[var(--color-text-primary)]">{edges.length}</div>
             </div>
-            <div className="bg-red-50 rounded-lg p-2 text-center border border-red-100">
-              <div className="font-black text-red-600">{processedData?.cyclicNodes.size ?? 0}</div>
-              <div className="text-[10px] uppercase text-red-500">Cycles</div>
+            <div className="metric-card" style={{ background: "var(--color-cycle-subtle)", borderColor: "color-mix(in srgb, var(--color-cycle) 20%, transparent)" }}>
+              <div className="micro-label" style={{ color: "var(--color-cycle)" }}>Cycles</div>
+              <div className="data-mono font-semibold" style={{ color: "var(--color-cycle)" }}>{processedData?.cyclicNodes.size ?? 0}</div>
             </div>
-            <div className="bg-amber-50 rounded-lg p-2 text-center border border-amber-100">
-              <div className="font-black text-amber-600">{hotspotCount}</div>
-              <div className="text-[10px] uppercase text-amber-500">Hotspots</div>
+            <div className="metric-card" style={{ background: "var(--color-hotspot-subtle)", borderColor: "color-mix(in srgb, var(--color-hotspot) 20%, transparent)" }}>
+              <div className="micro-label" style={{ color: "var(--color-hotspot)" }}>Hotspots</div>
+              <div className="data-mono font-semibold" style={{ color: "var(--color-hotspot)" }}>{hotspotCount}</div>
             </div>
           </div>
 
-          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 border-t pt-3">Role Legend</div>
+          <div className="micro-label mb-3 border-t border-[var(--color-border-subtle)] pt-3">Role Legend</div>
           <div className="space-y-2">
             {Object.entries(ROLE_COLORS).map(([role, colors]) => (
-              <div key={role} className="flex items-center gap-2 text-xs text-slate-600 capitalize">
-                <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
+              <div key={role} className="flex items-center gap-2 ui-label text-[var(--color-text-secondary)] capitalize">
+                <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
                 {role}
               </div>
             ))}
@@ -388,22 +366,32 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
           <button
             onClick={() => setCriticalPathOnly(p => !p)}
-            className={`mt-4 w-full py-2 text-xs font-bold uppercase rounded-lg border transition ${criticalPathOnly ? "bg-slate-800 text-white border-slate-900" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"}`}
+            className={`mt-4 w-full py-2 micro-label rounded-lg border transition ${
+              criticalPathOnly
+                ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
+                : "bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)] border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
+            }`}
           >
             {criticalPathOnly ? "Show All Files" : "Connected Only"}
           </button>
         </div>
       </div>
 
-      {/* ── Left inspect panel ── */}
-      <div className={`absolute top-4 left-4 z-20 w-80 bg-white/95 backdrop-blur shadow-2xl border border-slate-200 rounded-2xl flex flex-col transition-all duration-300 transform ${focusedNodeId ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0 pointer-events-none"}`}>
-        <div className="p-4 border-b border-slate-100 flex items-start justify-between">
+      {/* Left inspect panel */}
+      <div
+        className={`absolute top-4 left-4 z-20 w-80 compact-card bg-[var(--color-bg-surface)] flex flex-col transition-all duration-300 transform ${
+          focusedNodeId ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="p-4 border-b border-[var(--color-border-subtle)] flex items-start justify-between">
           <div className="min-w-0 pr-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Inspecting</div>
-            <div className="font-bold text-slate-800 truncate" title={focusedNodeData?.rawLabel}>{focusedNodeData?.label}</div>
-            <div className="text-xs text-slate-500 truncate" title={focusedNodeData?.pathLabel}>{focusedNodeData?.pathLabel}</div>
+            <div className="micro-label mb-1">Inspecting</div>
+            <div className="font-semibold text-[var(--color-text-primary)] truncate">{focusedNodeData?.label}</div>
+            <div className="data-mono-dense text-[var(--color-text-tertiary)] truncate" title={focusedNodeData?.pathLabel}>
+              {focusedNodeData?.pathLabel}
+            </div>
           </div>
-          <button onClick={() => setFocusedNodeId(null)} className="p-1 text-slate-400 hover:text-slate-700 bg-slate-50 rounded-md">
+          <button onClick={() => setFocusedNodeId(null)} className="p-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-subtle)] rounded-md">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -411,24 +399,23 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         <div className="p-4 max-h-[60vh] overflow-y-auto space-y-5">
           <button
             onClick={() => navigator.clipboard.writeText(focusedNodeData?.rawLabel ?? "")}
-            className="w-full flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 py-2 rounded-lg text-xs font-semibold transition"
+            className="w-full flex items-center justify-center gap-2 btn-secondary py-2 text-xs"
           >
             <Copy className="w-3 h-3" /> Copy Path
           </button>
 
           {focusedNodeData?.isCyclic && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs flex gap-2">
+            <div className="badge-cycle p-3 rounded-lg text-xs flex gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" /> Part of a circular dependency loop.
             </div>
           )}
 
-          {/* Dependents */}
           <div>
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase text-slate-400 mb-2">
+            <div className="flex items-center justify-between micro-label mb-2">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" /> Dependents
+                <span className="w-2 h-2 rounded-full bg-[var(--color-healthy)]" /> Dependents
               </span>
-              <span>{processedData?.reverseAdjacency.get(focusedNodeId!)?.length ?? 0}</span>
+              <span className="data-mono-dense">{processedData?.reverseAdjacency.get(focusedNodeId!)?.length ?? 0}</span>
             </div>
             <div className="space-y-1">
               {processedData?.reverseAdjacency.get(focusedNodeId!)?.map(id => {
@@ -436,7 +423,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
                 return (
                   <div
                     key={id}
-                    className="text-xs text-slate-600 bg-slate-50 px-2 py-1.5 rounded truncate cursor-pointer hover:bg-slate-100"
+                    className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
                     onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
                   >
                     {getDisplayName(id).filename}
@@ -444,18 +431,17 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
                 );
               })}
               {!processedData?.reverseAdjacency.get(focusedNodeId!)?.length && (
-                <div className="text-xs text-slate-400 italic">No inbound imports.</div>
+                <div className="ui-label text-[var(--color-text-tertiary)] italic">No inbound imports.</div>
               )}
             </div>
           </div>
 
-          {/* Dependencies */}
           <div>
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase text-slate-400 mb-2">
+            <div className="flex items-center justify-between micro-label mb-2">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-blue-500" /> Dependencies
+                <span className="w-2 h-2 rounded-full bg-[var(--color-accent)]" /> Dependencies
               </span>
-              <span>{processedData?.adjacency.get(focusedNodeId!)?.length ?? 0}</span>
+              <span className="data-mono-dense">{processedData?.adjacency.get(focusedNodeId!)?.length ?? 0}</span>
             </div>
             <div className="space-y-1">
               {processedData?.adjacency.get(focusedNodeId!)?.map(id => {
@@ -463,7 +449,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
                 return (
                   <div
                     key={id}
-                    className="text-xs text-slate-600 bg-slate-50 px-2 py-1.5 rounded truncate cursor-pointer hover:bg-slate-100"
+                    className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
                     onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
                   >
                     {getDisplayName(id).filename}
@@ -471,20 +457,19 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
                 );
               })}
               {!processedData?.adjacency.get(focusedNodeId!)?.length && (
-                <div className="text-xs text-slate-400 italic">No outbound imports.</div>
+                <div className="ui-label text-[var(--color-text-tertiary)] italic">No outbound imports.</div>
               )}
             </div>
           </div>
 
-          {/* Code snippet */}
           {focusedNodeData?.kind === "file" && focusedNodeData.codeSnippet && (
             <div>
-              <div className="text-[10px] font-bold uppercase text-slate-400 mb-2">Code Snippet</div>
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+              <div className="micro-label mb-2">Code Snippet</div>
+              <div className="border border-[var(--color-border-strong)] rounded-lg overflow-hidden bg-[var(--color-bg-subtle)]">
                 <SyntaxHighlighter
                   language="typescript"
                   style={oneLight}
-                  customStyle={{ background: "transparent", margin: 0, fontSize: "11px", padding: "10px" }}
+                  customStyle={{ background: "transparent", margin: 0, fontSize: "11px", padding: "10px", fontFamily: "var(--font-mono)" }}
                 >
                   {focusedNodeData.codeSnippet}
                 </SyntaxHighlighter>
@@ -494,7 +479,6 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         </div>
       </div>
 
-      {/* ── React Flow canvas ── */}
       <ReactFlow<Node<GraphNodeData>, Edge>
         nodes={nodes}
         edges={edges}
@@ -508,10 +492,10 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         maxZoom={2}
         className="bg-transparent"
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#cbd5e1" />
-        <Controls className="bg-white border-slate-200 text-slate-600 shadow-md" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#E2E8F0" />
+        <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]" />
         <MiniMap
-          maskColor="rgba(248, 250, 252, 0.8)"
+          maskColor="rgba(248, 250, 252, 0.85)"
           nodeColor={n => ROLE_COLORS[(n.data as GraphNodeData).category ?? "internal"]?.border ?? "#64748b"}
         />
       </ReactFlow>

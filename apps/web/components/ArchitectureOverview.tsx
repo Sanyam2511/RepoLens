@@ -43,27 +43,27 @@ const hashString = (value: string) => {
 
 const getDynamicColor = (key: string) => {
   const lower = key.toLowerCase();
-  if (lower.includes("web") || lower.includes("frontend") || lower.includes("pages")) return "#534AB7"; 
-  if (lower.includes("worker") || lower.includes("backend") || lower.includes("api") || lower.includes("analyzer")) return "#0F6E56"; 
-  if (lower.includes("shared") || lower.includes("core") || lower.includes("types")) return "#B45309"; 
-  const DYNAMIC_COLORS = ["#7C3AED", "#be123c", "#0284c7", "#059669", "#d97706"];
+  if (lower.includes("web") || lower.includes("frontend") || lower.includes("pages")) return "#7C3AED";
+  if (lower.includes("worker") || lower.includes("backend") || lower.includes("api") || lower.includes("analyzer")) return "#059669";
+  if (lower.includes("shared") || lower.includes("core") || lower.includes("types")) return "#6366F1";
+  const DYNAMIC_COLORS = ["#7C3AED", "#6366F1", "#0891B2", "#059669", "#64748B"];
   return DYNAMIC_COLORS[hashString(key) % DYNAMIC_COLORS.length];
 };
 
 const getNodeCategoryAndAccent = (layer: number, key: string) => {
-  if (layer === 0) return { category: "leaf", accent: "#5F5E5A" }; 
-  if (layer === 4) return { category: "hotspot", accent: "#B45309" }; 
-  if (layer === 5) return { category: "npm", accent: "#185FA5" }; 
+  if (layer === 0) return { category: "leaf", accent: "#64748B" };
+  if (layer === 4) return { category: "hotspot", accent: "#F59E0B" };
+  if (layer === 5) return { category: "npm", accent: "#64748B" };
   return { category: "internal", accent: getDynamicColor(key) };
 };
 
 const isRelevantNode = (pathSegments: string[], fileName: string) => {
   const ignoredDirs = new Set(["node_modules", "dist", "build", ".next", "public", "assets", "test", "docs"]);
   if (pathSegments.some(seg => ignoredDirs.has(seg.toLowerCase()))) return false;
-  
+
   const ignoredExts = [".css", ".scss", ".md", ".mdx", ".png", ".svg", ".json", ".lock"];
   if (ignoredExts.some(ext => fileName.endsWith(ext))) {
-    if (fileName !== "package.json") return false; 
+    if (fileName !== "package.json") return false;
   }
   return true;
 };
@@ -83,7 +83,7 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
   const createVisualNode = (id: string, label: string, layer: number, kind: any, sublabel: string, rootKeyForColor: string) => {
     if (visualNodes.has(id)) return;
     const { category, accent } = getNodeCategoryAndAccent(layer, rootKeyForColor);
-    
+
     visualNodes.set(id, {
       id,
       type: "analysisNode",
@@ -96,26 +96,26 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
   const createEdge = (source: string, target: string, type: "struct" | "import", isCross: boolean, color: string) => {
     const edgeId = `${type}-${source}->${target}`;
     if (visualEdges.has(edgeId) || source === target) return;
-    
+
     visualEdges.set(edgeId, {
       id: edgeId,
       source,
       target,
       type: "smoothstep",
       animated: false,
-      markerEnd: type === "import" ? { type: MarkerType.ArrowClosed, color: isCross ? "#B45309" : color, width: 10, height: 10 } : undefined,
-      style: { 
-        stroke: type === "import" && isCross ? "#B45309" : color, 
-        strokeWidth: type === "struct" ? 1 : 1.4, 
+      markerEnd: type === "import" ? { type: MarkerType.ArrowClosed, color: isCross ? "#F59E0B" : color, width: 10, height: 10 } : undefined,
+      style: {
+        stroke: type === "import" && isCross ? "#F59E0B" : color,
+        strokeWidth: type === "struct" ? 1 : 1.4,
         opacity: type === "struct" ? 0.3 : 0.7,
-        strokeDasharray: type === "import" && isCross ? "5 5" : "none" 
+        strokeDasharray: type === "import" && isCross ? "5 5" : "none",
       },
     });
   };
 
   const inboundCount = new Map<string, number>();
   const connectsToExternal = new Set<string>();
-  
+
   graphData.edges.forEach(edge => {
     inboundCount.set(edge.target, (inboundCount.get(edge.target) ?? 0) + 1);
     const targetNode = graphData.nodes.find(n => n.id === edge.target);
@@ -161,7 +161,7 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
     const pkgColorKey = packageId;
 
     createVisualNode(packageId, packageId, 1, "folder", "workspace package", pkgColorKey);
-    
+
     if (moduleId !== packageId) {
       const modLabel = splitPath(moduleId).pop() + "/";
       createVisualNode(moduleId, modLabel, 2, "folder", "core module", pkgColorKey);
@@ -176,9 +176,9 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
       const sublabel = isEntryPoint ? "entry point" : talksExternal ? "boundary logic" : "architecture node";
       createVisualNode(node.id, fileName, 3, "file", sublabel, pkgColorKey);
       createEdge(moduleId, node.id, "struct", false, getDynamicColor(pkgColorKey));
-      fileToVisualMap.set(node.id, node.id); 
+      fileToVisualMap.set(node.id, node.id);
     } else {
-      fileToVisualMap.set(node.id, moduleId); 
+      fileToVisualMap.set(node.id, moduleId);
       moduleFileCounts.set(moduleId, (moduleFileCounts.get(moduleId) ?? 0) + 1);
     }
   });
@@ -198,7 +198,6 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
     createEdge(visSource, visTarget, "import", sourceColor !== targetColor, sourceColor);
   });
 
-  // THE MAGIC TRICK: INVISIBLE ROOT TO FIX HORIZONTAL SPREAD
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 90, align: 'UL' });
@@ -239,7 +238,7 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
 };
 
 export default function ArchitectureOverview({ graphData }: { graphData: RepoGraph | null }) {
-  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node<GraphNodeData>, Edge> | null>(null);
   const { nodes, edges } = useMemo(() => buildArchitectureTree(graphData), [graphData]);
 
   useEffect(() => {
@@ -254,12 +253,12 @@ export default function ArchitectureOverview({ graphData }: { graphData: RepoGra
     "Layer 2 · Core Modules",
     "Layer 3 · Leaf Modules",
     "Layer 4 · Shared Boundaries",
-    "Layer 5 · External Dependencies"
+    "Layer 5 · External Dependencies",
   ];
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-slate-200/80 bg-gradient-to-b from-[#fbfaf7] via-[#f7f4ee] to-[#f2eee6]">
-      <div className="pointer-events-none absolute left-6 top-6 z-10 space-y-3 text-[10px] uppercase font-bold tracking-[0.25em] text-slate-500">
+    <div className="relative h-full w-full overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] dot-grid-bg">
+      <div className="pointer-events-none absolute left-6 top-6 z-10 space-y-3 micro-label text-[var(--color-text-tertiary)]">
         {layerLabels.map(l => <div key={l}>{l}</div>)}
       </div>
 
@@ -279,8 +278,8 @@ export default function ArchitectureOverview({ graphData }: { graphData: RepoGra
         maxZoom={2}
         className="h-full w-full bg-transparent"
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#d6d3cd" />
-        <Controls className="bg-white/90 border border-slate-200 text-slate-600 shadow-sm" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#E2E8F0" />
+        <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]" />
       </ReactFlow>
     </div>
   );

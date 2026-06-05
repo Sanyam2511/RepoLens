@@ -28,25 +28,34 @@ export type GraphNodeData = {
   extension?: string;
 };
 
-export const COLOR_MAP: Record<NodeCategory, { bg: string; border: string; text: string }> = {
-  entry: { bg: "#FAECE7", border: "#993C1D", text: "#712B13" },
-  hotspot: { bg: "#FAEEDA", border: "#854F0B", text: "#633806" },
-  leaf: { bg: "#F1EFE8", border: "#5F5E5A", text: "#444441" },
-  storage: { bg: "#E1F5EE", border: "#0F6E56", text: "#085041" },
-  api: { bg: "#EEEDFE", border: "#534AB7", text: "#3C3489" },
-  internal: { bg: "#E6F1FB", border: "#185FA5", text: "#0C447C" },
-  npm: { bg: "#EBF4FF", border: "#2563EB", text: "#1E3A8A" }, 
+const NODE_ROLE_COLORS: Record<NodeCategory, string> = {
+  entry: "var(--color-node-entry)",
+  hotspot: "var(--color-hotspot)",
+  leaf: "var(--color-node-npm)",
+  storage: "var(--color-node-storage)",
+  api: "var(--color-node-api)",
+  internal: "var(--color-node-core)",
+  npm: "var(--color-node-npm)",
 };
 
-// Sharper, high-fidelity palette for instantly recognizable architectural roles
+export const COLOR_MAP: Record<NodeCategory, { bg: string; border: string; text: string }> = {
+  entry: { bg: "rgba(124, 58, 237, 0.08)", border: "#7C3AED", text: "#0F172A" },
+  hotspot: { bg: "rgba(245, 158, 11, 0.08)", border: "#F59E0B", text: "#0F172A" },
+  leaf: { bg: "rgba(100, 116, 139, 0.08)", border: "#64748B", text: "#0F172A" },
+  storage: { bg: "rgba(8, 145, 178, 0.08)", border: "#0891B2", text: "#0F172A" },
+  api: { bg: "rgba(124, 58, 237, 0.08)", border: "#7C3AED", text: "#0F172A" },
+  internal: { bg: "rgba(99, 102, 241, 0.08)", border: "#6366F1", text: "#0F172A" },
+  npm: { bg: "rgba(100, 116, 139, 0.08)", border: "#64748B", text: "#0F172A" },
+};
+
 export const ROLE_COLORS: Record<NodeCategory, { bg: string; border: string; text: string; light: string }> = {
-  entry: { bg: "#FFF1F2", border: "#EF4444", text: "#991B1B", light: "#FEE2E2" },     // Bold Coral
-  hotspot: { bg: "#FFFBEB", border: "#F59E0B", text: "#92400E", light: "#FEF3C7" },  // Vibrant Amber
-  leaf: { bg: "#F8FAFC", border: "#94A3B8", text: "#334155", light: "#E2E8F0" },     // Clean Gray
-  storage: { bg: "#F0FDFA", border: "#0D9488", text: "#115E59", light: "#CCFBF1" },  // Deep Teal
-  api: { bg: "#FAF5FF", border: "#9333EA", text: "#581C87", light: "#F3E8FF" },      // Neon Purple
-  npm: { bg: "#EFF6FF", border: "#2563EB", text: "#1E3A8A", light: "#DBEAFE" },      // Rich Blue
-  internal: { bg: "#F1F5F9", border: "#64748B", text: "#334155", light: "#CBD5E1" }  // Slate
+  entry: { bg: "rgba(124, 58, 237, 0.08)", border: "#7C3AED", text: "#0F172A", light: "rgba(124, 58, 237, 0.08)" },
+  hotspot: { bg: "rgba(245, 158, 11, 0.08)", border: "#F59E0B", text: "#0F172A", light: "rgba(245, 158, 11, 0.08)" },
+  leaf: { bg: "rgba(100, 116, 139, 0.08)", border: "#64748B", text: "#0F172A", light: "rgba(100, 116, 139, 0.08)" },
+  storage: { bg: "rgba(8, 145, 178, 0.08)", border: "#0891B2", text: "#0F172A", light: "rgba(8, 145, 178, 0.08)" },
+  api: { bg: "rgba(124, 58, 237, 0.08)", border: "#7C3AED", text: "#0F172A", light: "rgba(124, 58, 237, 0.08)" },
+  npm: { bg: "rgba(100, 116, 139, 0.08)", border: "#64748B", text: "#0F172A", light: "rgba(100, 116, 139, 0.08)" },
+  internal: { bg: "rgba(99, 102, 241, 0.08)", border: "#6366F1", text: "#0F172A", light: "rgba(99, 102, 241, 0.08)" },
 };
 
 export const categorizeNode = (
@@ -77,39 +86,61 @@ const KIND_META: Record<GraphNodeKind, { label: string; icon: React.ReactNode }>
 export function AnalysisGraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
   const category = data.category ?? "internal";
   const colors = COLOR_MAP[category];
+  const roleColor = NODE_ROLE_COLORS[category];
   const accent = data.accent ?? colors.border;
   const meta = data.kind === "cluster" ? null : KIND_META[data.kind as GraphNodeKind];
 
   if (data.isCluster) {
     return (
-      <div className={`relative h-full w-full overflow-hidden rounded-[30px] border bg-white/95 ${selected ? "border-sky-300 ring-2 ring-sky-200/70" : "border-slate-200/70"}`} style={{ boxShadow: `0 14px 30px rgba(15, 23, 42, 0.05), 0 0 0 1px ${accent}12 inset`, backgroundImage: `linear-gradient(135deg, ${accent}06 0%, rgba(255,255,255,0.96) 45%, rgba(255,255,255,0.94) 100%)` }}>
+      <div
+        className={`relative h-full w-full overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] ${selected ? "ring-2 ring-[var(--color-accent-subtle)]" : ""}`}
+        style={{ borderColor: accent, borderWidth: 1.5, boxShadow: "var(--shadow-card)" }}
+      >
         <Handle type="target" position={Position.Top} className="!h-2.5 !w-2.5 !border-2 !border-white" style={{ background: accent }} />
         <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white" style={{ background: accent }} />
-        <div className="absolute inset-x-0 top-0 h-1.5" style={{ background: accent }} />
-        <div className="relative flex h-full flex-col justify-between p-4">
+        <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: accent }} />
+        <div className="relative flex h-full flex-col justify-between p-3.5">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0"><div className="mt-1 truncate text-lg font-semibold text-slate-900">{data.clusterLabel}</div></div>
-            <div className="shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ borderColor: `${accent}30`, color: accent }}>{data.clusterSize ?? 0} nodes</div>
+            <div className="min-w-0">
+              <div className="mt-1 truncate text-[13px] font-semibold text-[var(--color-text-primary)]">{data.clusterLabel}</div>
+            </div>
+            <div className="badge-chip shrink-0" style={{ borderColor: `${accent}40`, color: accent, border: "1px solid" }}>
+              <span className="data-mono-dense">{data.clusterSize ?? 0}</span> nodes
+            </div>
           </div>
-          <div className="mt-3 text-sm leading-6 text-slate-600">{data.clusterSummary}</div>
+          <div className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{data.clusterSummary}</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`group relative h-full w-full overflow-hidden rounded-[8px] border transition-transform duration-200 ${selected ? "border-sky-300 ring-2 ring-sky-200/70" : "border-white/80"}`} style={{ boxShadow: selected ? `0 14px 28px rgba(37,99,235,0.10), 0 0 0 1px ${accent}18 inset` : `0 10px 22px rgba(15,23,42,0.05), 0 0 0 1px ${accent}10 inset`, minWidth: data.width ?? 140, backgroundColor: colors.bg, borderColor: colors.border }}>
-      <div className="absolute inset-y-0 left-0 w-1.5" style={{ background: colors.border }} />
+    <div
+      className={`group relative h-full w-full overflow-hidden rounded-lg transition-transform duration-200 ${selected ? "ring-2 ring-[var(--color-accent-subtle)]" : ""}`}
+      style={{
+        minWidth: data.width ?? 140,
+        backgroundColor: colors.bg,
+        border: `1.5px solid ${colors.border}`,
+        boxShadow: "var(--shadow-card)",
+      }}
+    >
+      <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: colors.border }} />
       <Handle type="target" position={Position.Top} className="!h-2.5 !w-2.5 !border-2 !border-white" style={{ background: colors.border }} />
       <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-white" style={{ background: colors.border }} />
-      <div className="relative flex h-full flex-col justify-between gap-2 p-3">
+      <div className="relative flex h-full flex-col justify-between gap-2 px-3.5 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            {meta && <div className="inline-flex shrink-0 items-center justify-center rounded-full border px-1.5 py-1" style={{ borderColor: `${colors.border}22`, color: colors.border }}>{meta.icon}</div>}
-            <div className="min-w-0 truncate text-[13px] font-medium" style={{ color: colors.text }}>{data.label}</div>
+            {meta && (
+              <div className="inline-flex shrink-0 items-center justify-center rounded-md border px-1.5 py-1" style={{ borderColor: `${colors.border}33`, color: roleColor }}>
+                {meta.icon}
+              </div>
+            )}
+            <div className="min-w-0 truncate text-[13px] font-semibold text-[var(--color-text-primary)]">{data.label}</div>
           </div>
         </div>
-        {(data.sublabel || data.pathLabel) && <div className="truncate text-[11px]" style={{ color: colors.border, opacity: 0.8 }}>{data.sublabel || data.pathLabel}</div>}
+        {(data.sublabel || data.pathLabel) && (
+          <div className="truncate data-mono-dense text-[var(--color-text-tertiary)]">{data.sublabel || data.pathLabel}</div>
+        )}
       </div>
     </div>
   );
@@ -118,47 +149,56 @@ export function AnalysisGraphNode({ data, selected }: NodeProps<Node<GraphNodeDa
 export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
   const category = data.category ?? "internal";
   const colors = ROLE_COLORS[category] || ROLE_COLORS.internal;
-  const isNPM = data.kind === "npm-package";
-  
+
   return (
-    <div 
-      className={`group relative h-full w-full transition-all duration-200 border-2 ${isNPM ? "rounded-[24px]" : "rounded-xl"} ${selected ? "ring-4 ring-offset-2 ring-sky-400" : "shadow-md hover:shadow-xl hover:-translate-y-1"}`}
-      style={{ backgroundColor: "#ffffff", borderColor: colors.border, minWidth: data.width }}
+    <div
+      className={`group relative h-full w-full transition-all duration-200 rounded-lg ${selected ? "ring-2 ring-[var(--color-accent)]" : ""}`}
+      style={{
+        backgroundColor: colors.bg,
+        border: `1.5px solid ${colors.border}`,
+        minWidth: data.width,
+        boxShadow: "var(--shadow-card)",
+      }}
     >
+      <div className="absolute inset-x-0 top-0 h-[3px] rounded-t-lg" style={{ background: colors.border }} />
       <Handle type="target" position={Position.Top} className="!h-3 !w-3 !border-2 !border-white" style={{ background: colors.border }} />
       <Handle type="source" position={Position.Bottom} className="!h-3 !w-3 !border-2 !border-white" style={{ background: colors.border }} />
 
-      <div className={`flex items-center justify-between px-3 py-2 border-b ${isNPM ? "rounded-t-[22px]" : "rounded-t-[10px]"}`} style={{ backgroundColor: colors.light, borderColor: `${colors.border}40` }}>
+      <div className="flex items-center justify-between px-3.5 pt-3 pb-1">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colors.text }}>
-            {isNPM ? "NPM" : data.extension ? `.${data.extension}` : data.kind}
+          <span className="micro-label" style={{ color: colors.border }}>
+            {data.kind === "npm-package" ? "NPM" : data.extension ? `.${data.extension}` : data.kind}
           </span>
           {data.isCyclic && (
-            <div className="flex items-center gap-1 bg-red-100 text-red-700 border border-red-300 rounded-full px-1.5 py-0.5" title="Circular Dependency Detected">
+            <div className="badge-chip badge-cycle flex items-center gap-1" title="Circular Dependency Detected">
               <AlertTriangle className="h-3 w-3" />
             </div>
           )}
         </div>
         {(data.inbound ?? 0) > 6 && (
-          <div className="text-[9px] font-bold uppercase bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-sm">Hotspot</div>
+          <div className="badge-chip badge-hotspot">Hotspot</div>
         )}
       </div>
 
-      <div className="p-3 flex flex-col h-[calc(100%-36px)] justify-between">
+      <div className="px-3.5 pb-2.5 flex flex-col justify-between" style={{ minHeight: "calc(100% - 28px)" }}>
         <div>
-          <div className="truncate text-[14px] font-bold text-slate-800" title={data.label}>{data.label}</div>
-          <div className="truncate text-[10px] text-slate-400 mt-0.5" title={data.pathLabel}>{data.pathLabel || "root"}</div>
-        </div>
-        
-        <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
-          <div className="flex flex-col items-center px-2" title="Files that import this">
-            <span className="text-[10px] uppercase font-bold text-slate-400">In</span>
-            <span className="text-sm font-black" style={{ color: colors.text }}>{data.inbound ?? 0}</span>
+          <div className="truncate text-[13px] font-semibold text-[var(--color-text-primary)]" title={data.label}>
+            {data.label}
           </div>
-          <div className="h-6 w-px bg-slate-200"></div>
+          <div className="truncate data-mono-dense text-[var(--color-text-tertiary)] mt-0.5" title={data.pathLabel}>
+            {data.pathLabel || "root"}
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-2">
+          <div className="flex flex-col items-center px-2" title="Files that import this">
+            <span className="micro-label">In</span>
+            <span className="data-mono-dense font-semibold text-[var(--color-text-primary)]">{data.inbound ?? 0}</span>
+          </div>
+          <div className="h-6 w-px bg-[var(--color-border-subtle)]" />
           <div className="flex flex-col items-center px-2" title="Files this imports">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Out</span>
-            <span className="text-sm font-black text-slate-600">{data.outbound ?? 0}</span>
+            <span className="micro-label">Out</span>
+            <span className="data-mono-dense font-semibold text-[var(--color-text-primary)]">{data.outbound ?? 0}</span>
           </div>
         </div>
       </div>
