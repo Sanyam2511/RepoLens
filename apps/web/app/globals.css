@@ -383,3 +383,232 @@ h4 {
   background: var(--color-bg-inverse);
   color: var(--color-text-inverse);
 }
+
+/* Homepage intelligence layer */
+.repo-capability-card {
+  height: 100%;
+  min-height: 220px;
+}
+
+.repo-capability-card:hover .repo-query-pulse {
+  animation: repoQueryPulse 2.8s ease-in-out infinite;
+}
+
+.repo-memory-card {
+  min-height: 0;
+  background:
+    radial-gradient(circle at 50% 62%, rgba(255, 255, 255, 0.22), transparent 18%),
+    linear-gradient(135deg, var(--color-accent) 0%, #4f46e5 55%, #4338ca 100%);
+}
+
+.repo-memory-card:hover .repo-memory-doc {
+  animation: repoMemoryDoc 2.8s ease-in-out infinite;
+}
+
+.repo-memory-card:hover .repo-memory-line {
+  animation: repoMemoryLine 2.6s ease-in-out infinite;
+}
+
+.repo-memory-card:hover .repo-brain-core {
+  animation: repoBrainCore 2.6s ease-in-out infinite;
+}
+
+.repo-memory-card:hover .repo-thinking {
+  animation: repoThinking 2.4s ease-in-out infinite;
+}
+
+.repo-capability-card:hover .repo-review-node {
+  animation: repoReviewFloat 3.5s ease-in-out infinite;
+}
+
+.repo-review-node-b {
+  animation-delay: 0.45s;
+}
+
+.repo-review-node-c {
+  animation-delay: 0.9s;
+}
+
+.repo-audit-line::before {
+  content: "";
+  position: absolute;
+  bottom: 12px;
+  left: 7px;
+  top: 12px;
+  width: 1px;
+  background: linear-gradient(var(--color-border-subtle), var(--color-accent), var(--color-border-subtle));
+  transform: scaleY(0.75);
+  transform-origin: top;
+  opacity: 0.35;
+}
+
+.repo-capability-card:hover .repo-audit-line::before {
+  animation: repoAuditTrace 3s ease-in-out infinite;
+}
+
+.repo-capability-card:hover .repo-audit-step {
+  animation: repoAuditStep 3s ease-in-out infinite;
+}
+
+.repo-capability-card:hover .repo-integration-orbit {
+  animation: repoIntegrationOrbit 4s ease-in-out infinite;
+}
+
+.repo-capability-card:hover .repo-integration-orbit-delayed {
+  animation: repoIntegrationOrbit 4s ease-in-out infinite;
+  animation-delay: 1.1s;
+}
+
+.repo-match-orbit::before,
+.repo-match-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 28px;
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: 9999px;
+}
+
+.repo-match-orbit::after {
+  inset: 54px;
+  border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+.repo-capability-card:hover .repo-match-orbit::after {
+  animation: repoMatchRing 5s linear infinite;
+}
+
+.repo-capability-card:hover .repo-match-center {
+  animation: repoMatchCenter 2.5s ease-in-out infinite;
+}
+
+@keyframes repoQueryPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  }
+  50% {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 30px rgba(99, 102, 241, 0.14);
+  }
+}
+
+@keyframes repoMemoryDoc {
+  0%,
+  100% {
+    opacity: 0.46;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes repoMemoryLine {
+  0%,
+  100% {
+    transform: scaleY(0.7);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 0.9;
+  }
+}
+
+@keyframes repoBrainCore {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 18px rgba(255, 255, 255, 0.08);
+  }
+}
+
+@keyframes repoThinking {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes repoReviewFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes repoAuditTrace {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scaleY(0.75);
+    transform-origin: top;
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes repoAuditStep {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes repoIntegrationOrbit {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-10px) translateX(6px);
+  }
+}
+
+@keyframes repoMatchRing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes repoMatchCenter {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 16px rgba(99, 102, 241, 0.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repo-query-pulse,
+  .repo-memory-doc,
+  .repo-memory-line,
+  .repo-brain-core,
+  .repo-thinking,
+  .repo-review-node,
+  .repo-audit-line::before,
+  .repo-audit-step,
+  .repo-integration-orbit,
+  .repo-integration-orbit-delayed,
+  .repo-match-orbit::after,
+  .repo-match-center {
+    animation: none;
+  }
+}
