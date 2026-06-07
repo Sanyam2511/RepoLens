@@ -8,6 +8,7 @@ import { workerFetch } from "../lib/auth";
 import Header from "../components/Header";
 import Hero from "../components/Hero";
 import Features from "../components/Features";
+import IntelligenceLayer from "../components/IntelligenceLayer";
 import Footer from "../components/Footer";
 import AnalyzerSummary from "../components/AnalyzerSummary";
 import ArchitectureOverview from "../components/ArchitectureOverview";
@@ -104,6 +105,7 @@ export default function RepoLensDashboard() {
       <main>
         <Hero />
         <Features />
+        <IntelligenceLayer />
 
         <section className="content-grid section-pad">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-start">

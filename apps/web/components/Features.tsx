@@ -17,15 +17,15 @@ export default function Features() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         {[
           { icon: Circle, label: "Feature", title: "Interactive graphs", desc: "Explore files, APIs and storage relationships with an intuitive visual interface." },
           { icon: Layers, label: "Scale", title: "Large repo heuristics", desc: "Smart pruning and component packing keep large graphs readable and fast." },
           { icon: Clock, label: "History", title: "Saved analyses", desc: "Sign up to save runs, revisit results, and share findings with teammates." },
         ].map(({ icon: Icon, label, title, desc }) => (
-          <div key={title} className="surface-card p-6">
+          <div key={title} className="group py-2">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-[var(--color-accent-subtle)] p-2 text-[var(--color-accent)]">
+              <div className="rounded-lg bg-[var(--color-accent-subtle)] p-2 text-[var(--color-accent)] transition-colors group-hover:bg-[var(--color-bg-surface)]">
                 <Icon className="h-5 w-5" />
               </div>
               <div>
@@ -47,22 +47,24 @@ export default function Features() {
               RepoLens renders a dependency map so you can identify critical nodes, bottlenecks, and disconnected modules
               before you dive into the repository.
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="mt-6 grid gap-x-6 gap-y-3 sm:grid-cols-2">
               {[
                 "Trace imports, API calls, and storage",
                 "Spot heavily coupled packages early",
                 "Share a visual map with the team",
                 "Keep every scan tied to history",
               ].map((item) => (
-                <div key={item} className="compact-card px-4 py-3 text-sm text-[var(--color-text-secondary)]">
+                <div key={item} className="flex items-start gap-3 text-sm text-[var(--color-text-secondary)]">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
                   {item}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="surface-card p-6">
-            <div className="h-[280px] rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] flex items-center justify-center dot-grid-bg">
+          <div className="relative min-h-[320px]">
+            <div className="absolute inset-6 rounded-full bg-[var(--color-accent-subtle)] blur-3xl opacity-70" aria-hidden />
+            <div className="relative h-[300px] rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] flex items-center justify-center dot-grid-bg">
               <svg className="h-full w-full" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="featGraphTitle featGraphDesc">
                 <title id="featGraphTitle">Dependency graph illustration</title>
                 <desc id="featGraphDesc">Nodes connected by import edges showing module relationships</desc>
@@ -83,21 +85,23 @@ export default function Features() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-8 py-4 md:grid-cols-3">
         {[
           ["01", "Paste URL", "Enter a public GitHub repo URL and click analyze."],
           ["02", "Inspect", "Drill into nodes to view code, dependencies, and metrics."],
           ["03", "Save and share", "Store results in your history for future reference or team reviews."],
         ].map(([num, title, desc]) => (
-          <div key={num} className="compact-card p-5">
-            <div className="micro-label">{num}</div>
+          <div key={num} className="relative bg-[var(--color-bg-base)] pr-6">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] data-mono-dense font-semibold text-[var(--color-accent)]">
+              {num}
+            </div>
             <div className="mt-3 text-lg font-semibold text-[var(--color-text-primary)]">{title}</div>
             <div className="mt-2 text-sm text-[var(--color-text-secondary)]">{desc}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
         {[
           {
             title: "Interactive graph preview",
@@ -146,8 +150,8 @@ export default function Features() {
             ),
           },
         ].map((card) => (
-          <div key={card.title} className="compact-card p-5">
-            <div className="h-28 rounded-lg bg-[var(--color-bg-subtle)] border border-[var(--color-border-subtle)] flex items-center justify-center p-3">
+          <div key={card.title}>
+            <div className="h-24 rounded-lg bg-[var(--color-bg-subtle)] flex items-center justify-center p-3">
               {card.svg}
             </div>
             <div className="mt-4 text-sm font-semibold text-[var(--color-text-primary)]">{card.title}</div>
