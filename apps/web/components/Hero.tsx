@@ -88,11 +88,7 @@ export default function Hero() {
   return (
     <section className="dot-grid-bg relative overflow-hidden">
       <div className="content-grid relative pt-6 pb-10 md:pt-8 md:pb-14">
-        {/* Centered headline — Monity-style hub */}
         <div className="relative z-10 mx-auto max-w-2xl text-center">
-          <div className="badge-chip badge-accent inline-flex items-center gap-2">
-            Repo intelligence layer
-          </div>
 
           <h1 className="mt-3 hero-heading text-[clamp(2rem,5vw,3rem)]">
             Your repository architecture,

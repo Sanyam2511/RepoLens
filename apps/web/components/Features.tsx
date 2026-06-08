@@ -1,163 +1,417 @@
 "use client";
 
-import React from "react";
-import { Circle, Clock, Layers } from "lucide-react";
+import React, { useEffect, useState } from "react";
+function NodeCard({
+  label,
+  sub,
+  color,
+  active = false,
+}: {
+  label: string;
+  sub?: string;
+  color: string;
+  active?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-lg border px-3 py-2 transition-all duration-300"
+      style={{
+        borderColor: active ? color : "#E2E8F0",
+        background: active ? color + "12" : "#F8FAFC",
+        boxShadow: active ? `0 0 0 1px ${color}33` : "none",
+      }}
+    >
+      <div
+        className="text-[11px] font-semibold"
+        style={{ color: active ? color : "#475569" }}
+      >
+        {label}
+      </div>
+      {sub && (
+        <div className="font-mono text-[10px] text-slate-400 mt-0.5">{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function InteractiveGraphIllustration() {
+  const [active, setActive] = useState(0);
+
+  const nodes = [
+    { id: 0, label: "index.js", sub: "entry", color: "#7C3AED", x: 48, y: 18 },
+    { id: 1, label: "app.js", sub: "core", color: "#6366F1", x: 10, y: 52 },
+    { id: 2, label: "router.js", sub: "core", color: "#6366F1", x: 86, y: 52 },
+    { id: 3, label: "request.js", sub: "req/res", color: "#059669", x: 10, y: 82 },
+    { id: 4, label: "response.js", sub: "req/res", color: "#059669", x: 86, y: 82 },
+  ];
+
+  const edges = [
+    { from: 0, to: 1 }, { from: 0, to: 2 },
+    { from: 1, to: 3 }, { from: 2, to: 4 },
+  ];
+
+  const neighbors = edges
+    .filter((e) => e.from === active || e.to === active)
+    .flatMap((e) => [e.from, e.to])
+    .filter((n) => n !== active);
+
+  useEffect(() => {
+    const t = setInterval(() => setActive((a) => (a + 1) % nodes.length), 1800);
+    return () => clearInterval(t);
+  }, []);
+
+  const W = 240, H = 140;
+  const px = (pct: number, total: number) => (pct / 100) * total;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
+      {edges.map((e, i) => {
+        const from = nodes[e.from];
+        const to = nodes[e.to];
+        const isHighlighted = e.from === active || e.to === active;
+        const fromColor = from?.color ?? "#CBD5E1";
+        return (
+          <line
+            key={i}
+            x1={px(from?.x ?? 0, W)}
+            y1={px(from?.y ?? 0, H) + 12}
+            x2={px(to?.x ?? 0, W)}
+            y2={px(to?.y ?? 0, H)}
+            stroke={isHighlighted ? fromColor : "#E2E8F0"}
+            strokeWidth={isHighlighted ? 1.5 : 1}
+            strokeDasharray={isHighlighted ? "none" : "4 3"}
+            style={{ transition: "stroke 0.3s, stroke-width 0.3s" }}
+          />
+        );
+      })}
+      {nodes.map((n) => {
+        const isActive = n.id === active;
+        const isNeighbor = neighbors.includes(n.id);
+        return (
+          <g key={n.id} style={{ transition: "all 0.3s" }}>
+            <rect
+              x={px(n.x, W) - 28}
+              y={px(n.y, H) - 10}
+              width={56}
+              height={22}
+              rx={5}
+              fill={isActive ? n.color + "20" : isNeighbor ? n.color + "10" : "#F1F5F9"}
+              stroke={isActive || isNeighbor ? n.color : "#E2E8F0"}
+              strokeWidth={isActive ? 1.5 : 0.75}
+              style={{ transition: "all 0.3s" }}
+            />
+            <text
+              x={px(n.x, W)}
+              y={px(n.y, H) + 1}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={8}
+              fontWeight={isActive ? 700 : 500}
+              fill={isActive ? n.color : "#475569"}
+              style={{ transition: "fill 0.3s" }}
+            >
+              {n.label}
+            </text>
+            <text
+              x={px(n.x, W)}
+              y={px(n.y, H) + 10}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={6.5}
+              fill={isActive ? n.color : "#94A3B8"}
+            >
+              {n.sub}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function LargeRepoIllustration() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setCollapsed((c) => !c), 2200);
+    return () => clearInterval(t);
+  }, []);
+
+  const folders = [
+    { label: "examples/", count: "45 files", color: "#94A3B8" },
+    { label: "test/", count: "38 files", color: "#94A3B8" },
+    { label: "lib/", count: "14 files", color: "#6366F1" },
+  ];
+
+  return (
+    <div className="w-full h-full flex flex-col justify-center gap-2 px-2 py-1">
+      {/* Lib always expanded */}
+      <div className="rounded-lg border border-[#6366F1] bg-[#6366F110] px-3 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-[#6366F1]">lib/</span>
+          <span className="font-mono text-[10px] text-slate-400">14 files · expanded</span>
+        </div>
+        <div className="mt-1.5 flex gap-1.5 flex-wrap">
+          {["express.js", "application.js", "router.js", "request.js"].map((f) => (
+            <span
+              key={f}
+              className="rounded px-1.5 py-0.5 font-mono text-[9px] text-[#6366F1] bg-[#6366F115]"
+            >
+              {f}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* examples/ and test/ toggle */}
+      {folders.slice(0, 2).map((f) => (
+        <div
+          key={f.label}
+          className="rounded-lg border px-3 py-2 transition-all duration-500"
+          style={{
+            borderColor: collapsed ? "#E2E8F0" : "#CBD5E1",
+            background: collapsed ? "#F1F5F9" : "#F8FAFC",
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <span
+              className="text-[11px] font-medium transition-colors duration-300"
+              style={{ color: collapsed ? "#94A3B8" : "#475569" }}
+            >
+              {f.label}
+            </span>
+            <span className="font-mono text-[10px] text-slate-400">
+              {collapsed ? f.count + " · hidden" : f.count + " · visible"}
+            </span>
+          </div>
+          {!collapsed && (
+            <div className="mt-1 flex gap-1">
+              {[1, 2, 3].map((i) => (
+                <span
+                  key={i}
+                  className="h-1.5 rounded-full bg-slate-300"
+                  style={{ width: `${16 + i * 8}px` }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div
+        className="rounded-full border px-3 py-1 text-center font-mono text-[10px] transition-all duration-500"
+        style={{
+          borderColor: collapsed ? "#6366F1" : "#E2E8F0",
+          color: collapsed ? "#6366F1" : "#94A3B8",
+          background: collapsed ? "#EEF2FF" : "transparent",
+        }}
+      >
+        {collapsed ? "83 files collapsed · graph focused on lib/" : "Showing all 97 files"}
+      </div>
+    </div>
+  );
+}
+
+function HistoryIllustration() {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((t) => (t + 1) % 4), 1600);
+    return () => clearInterval(t);
+  }, []);
+
+  const scans = [
+    { label: "Apr 14", nodes: 42, edges: 88, status: "healthy" },
+    { label: "Apr 28", nodes: 51, edges: 112, status: "watch" },
+    { label: "May 7", nodes: 58, edges: 134, status: "hotspot" },
+    { label: "May 27", nodes: 47, edges: 93, status: "healthy" },
+  ];
+
+  const statusColor = { healthy: "#10B981", watch: "#F59E0B", hotspot: "#EF4444" };
+
+  return (
+    <div className="w-full h-full flex flex-col justify-center px-2 py-1 gap-2">
+      {/* Timeline */}
+      <div className="relative flex items-center justify-between px-2">
+        <div className="absolute left-4 right-4 h-px bg-[#E2E8F0]" />
+        {scans.map((s, i) => {
+          const color = statusColor[s.status as keyof typeof statusColor];
+          const isActive = i === tick;
+          return (
+            <div key={i} className="relative flex flex-col items-center gap-1">
+              <div
+                className="relative z-10 h-3 w-3 rounded-full border-2 border-white transition-all duration-300"
+                style={{
+                  background: color,
+                  boxShadow: isActive ? `0 0 0 3px ${color}40` : "none",
+                  transform: isActive ? "scale(1.3)" : "scale(1)",
+                }}
+              />
+              <span className="font-mono text-[9px] text-slate-400 whitespace-nowrap">{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Active scan detail */}
+      {scans[tick] && (
+        <div
+          className="rounded-lg border px-3 py-2.5 transition-all duration-300"
+          style={{
+            borderColor: statusColor[scans[tick].status as keyof typeof statusColor] + "55",
+            background: statusColor[scans[tick].status as keyof typeof statusColor] + "08",
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-700">
+              Scan · {scans[tick].label}
+            </span>
+            <span
+              className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+              style={{
+                color: statusColor[scans[tick].status as keyof typeof statusColor],
+                background: statusColor[scans[tick].status as keyof typeof statusColor] + "15",
+              }}
+            >
+              {scans[tick].status}
+            </span>
+          </div>
+          <div className="mt-1.5 flex gap-4 font-mono text-[10px] text-slate-500">
+            <span>{scans[tick].nodes} nodes</span>
+            <span>{scans[tick].edges} edges</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function Features() {
   return (
-    <section className="content-grid pt-4 pb-16 md:pb-20 space-y-10">
+    <section className="content-grid pt-4 pb-16 md:pb-20 space-y-14">
+      {/* Header */}
       <div className="text-center">
-        <div className="badge-chip badge-accent inline-flex items-center gap-2">
-          Capabilities
-        </div>
         <h2 className="mt-5 section-heading">Architecture clarity. Measurable results.</h2>
         <p className="mt-4 text-[var(--color-text-secondary)] max-w-3xl mx-auto">
-          Turn any public repository into a readable map. RepoLens helps teams discover how systems connect, reduce
-          onboarding time, and share insights across the org.
+          Turn any public repository into a readable map. RepoLens helps teams discover how systems connect,
+          reduce onboarding time, and share insights across the org.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-        {[
-          { icon: Circle, label: "Feature", title: "Interactive graphs", desc: "Explore files, APIs and storage relationships with an intuitive visual interface." },
-          { icon: Layers, label: "Scale", title: "Large repo heuristics", desc: "Smart pruning and component packing keep large graphs readable and fast." },
-          { icon: Clock, label: "History", title: "Saved analyses", desc: "Sign up to save runs, revisit results, and share findings with teammates." },
-        ].map(({ icon: Icon, label, title, desc }) => (
-          <div key={title} className="group py-2">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-[var(--color-accent-subtle)] p-2 text-[var(--color-accent)] transition-colors group-hover:bg-[var(--color-bg-surface)]">
-                <Icon className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="micro-label">{label}</div>
-                <h3 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">{title}</h3>
-              </div>
-            </div>
-            <p className="mt-3 text-sm text-[var(--color-text-secondary)]">{desc}</p>
-          </div>
-        ))}
-      </div>
+      {/* ── Top 3 feature cards (like reference layout) ── */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
 
-      <div className="px-0 py-0">
-        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-center">
-          <div>
-            <div className="micro-label">RepoLens insights</div>
-            <h3 className="mt-3 section-heading">See the graph before you read the code.</h3>
-            <p className="mt-3 text-[var(--color-text-secondary)]">
-              RepoLens renders a dependency map so you can identify critical nodes, bottlenecks, and disconnected modules
-              before you dive into the repository.
+        {/* Card 1: Interactive graph */}
+        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] overflow-hidden">
+          <div className="h-48 bg-[var(--color-bg-subtle)] border-b border-[var(--color-border-subtle)] p-4 flex items-center justify-center">
+            <InteractiveGraphIllustration />
+          </div>
+          <div className="p-5">
+            <div className="micro-label text-[var(--color-accent)]">Interactive</div>
+            <h3 className="mt-2 text-base font-semibold text-[var(--color-text-primary)]">
+              Click any node to explore its dependencies
+            </h3>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              The active node and its direct neighbors highlight instantly. Trace imports, API calls, and storage relationships with a click — no reading required.
             </p>
-            <div className="mt-6 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              {[
-                "Trace imports, API calls, and storage",
-                "Spot heavily coupled packages early",
-                "Share a visual map with the team",
-                "Keep every scan tied to history",
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-3 text-sm text-[var(--color-text-secondary)]">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
-                  {item}
-                </div>
-              ))}
-            </div>
           </div>
+        </div>
 
-          <div className="relative min-h-[320px]">
-            <div className="absolute inset-6 rounded-full bg-[var(--color-accent-subtle)] blur-3xl opacity-70" aria-hidden />
-            <div className="relative h-[300px] rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] flex items-center justify-center dot-grid-bg">
-              <svg className="h-full w-full" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="featGraphTitle featGraphDesc">
-                <title id="featGraphTitle">Dependency graph illustration</title>
-                <desc id="featGraphDesc">Nodes connected by import edges showing module relationships</desc>
-                <rect x="26" y="32" width="120" height="60" rx="8" fill="rgba(99,102,241,0.08)" stroke="#6366F1" strokeWidth="1.5" />
-                <rect x="26" y="32" width="120" height="3" rx="1" fill="#6366F1" />
-                <rect x="174" y="24" width="120" height="72" rx="8" fill="rgba(124,58,237,0.08)" stroke="#7C3AED" strokeWidth="1.5" />
-                <rect x="174" y="24" width="120" height="3" rx="1" fill="#7C3AED" />
-                <rect x="92" y="110" width="140" height="70" rx="8" fill="rgba(8,145,178,0.08)" stroke="#0891B2" strokeWidth="1.5" />
-                <rect x="92" y="110" width="140" height="3" rx="1" fill="#0891B2" />
-                <path d="M88 92 L182 70" stroke="#CBD5E1" strokeWidth="2" />
-                <path d="M118 124 L212 100" stroke="#CBD5E1" strokeWidth="2" />
-                <circle cx="90" cy="92" r="5" fill="#6366F1" />
-                <circle cx="186" cy="70" r="5" fill="#7C3AED" />
-                <circle cx="120" cy="124" r="5" fill="#0891B2" />
-              </svg>
-            </div>
+        {/* Card 2: Large repo heuristics */}
+        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] overflow-hidden">
+          <div className="h-48 bg-[var(--color-bg-subtle)] border-b border-[var(--color-border-subtle)] p-4 flex items-center justify-center">
+            <LargeRepoIllustration />
+          </div>
+          <div className="p-5">
+            <div className="micro-label text-[var(--color-accent)]">Scale</div>
+            <h3 className="mt-2 text-base font-semibold text-[var(--color-text-primary)]">
+              Large repos stay readable with smart pruning
+            </h3>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              Examples, tests, and fixtures collapse automatically so the graph focuses on architectural code. Expand any directory when you need the detail.
+            </p>
+          </div>
+        </div>
+
+        {/* Card 3: Saved analyses */}
+        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] overflow-hidden">
+          <div className="h-48 bg-[var(--color-bg-subtle)] border-b border-[var(--color-border-subtle)] p-4 flex items-center justify-center">
+            <HistoryIllustration />
+          </div>
+          <div className="p-5">
+            <div className="micro-label text-[var(--color-accent)]">History</div>
+            <h3 className="mt-2 text-base font-semibold text-[var(--color-text-primary)]">
+              Every scan saved and diffable over time
+            </h3>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              Sign up to save runs, track coupling scores across deploys, and jump back into any snapshot. Share findings with teammates without re-running the analysis.
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 py-4 md:grid-cols-3">
-        {[
-          ["01", "Paste URL", "Enter a public GitHub repo URL and click analyze."],
-          ["02", "Inspect", "Drill into nodes to view code, dependencies, and metrics."],
-          ["03", "Save and share", "Store results in your history for future reference or team reviews."],
-        ].map(([num, title, desc]) => (
-          <div key={num} className="relative bg-[var(--color-bg-base)] pr-6">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] data-mono-dense font-semibold text-[var(--color-accent)]">
-              {num}
-            </div>
-            <div className="mt-3 text-lg font-semibold text-[var(--color-text-primary)]">{title}</div>
-            <div className="mt-2 text-sm text-[var(--color-text-secondary)]">{desc}</div>
+      {/* ── See the graph before you read the code ── */}
+      <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] items-center">
+        <div>
+          <h3 className="mt-3 section-heading">See the graph before you read the code.</h3>
+          <p className="mt-3 text-[var(--color-text-secondary)]">
+            RepoLens renders a dependency map so you can identify critical nodes, bottlenecks, and disconnected
+            modules before you dive into the repository.
+          </p>
+          <div className="mt-6 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            {[
+              "Trace imports, API calls, and storage",
+              "Spot heavily coupled packages early",
+              "Share a visual map with the team",
+              "Keep every scan tied to history",
+            ].map((item) => (
+              <div key={item} className="flex items-start gap-3 text-sm text-[var(--color-text-secondary)]">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
+                {item}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-        {[
-          {
-            title: "Interactive graph preview",
-            desc: "See nodes, edges, and quick highlights at a glance.",
-            svg: (
-              <svg className="h-full w-full" viewBox="0 0 140 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="8" y="10" width="124" height="68" rx="8" fill="#F1F5F9" stroke="#E2E8F0" />
-                <circle cx="40" cy="30" r="6" fill="#6366F1" />
-                <circle cx="72" cy="22" r="5" fill="#7C3AED" />
-                <circle cx="98" cy="44" r="6" fill="#0891B2" />
-                <path d="M47 30 L65 24" stroke="#CBD5E1" strokeWidth="2" />
-                <path d="M79 26 L90 38" stroke="#CBD5E1" strokeWidth="2" />
-                <path d="M48 34 L88 42" stroke="#CBD5E1" strokeWidth="2" />
-                <rect x="18" y="52" width="64" height="6" rx="3" fill="#E2E8F0" />
-                <rect x="18" y="62" width="40" height="6" rx="3" fill="#E2E8F0" />
-              </svg>
-            ),
-          },
-          {
-            title: "Component packing",
-            desc: "Cluster services and folders to keep large graphs readable.",
-            svg: (
-              <svg className="h-full w-full" viewBox="0 0 140 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="20" y="16" width="98" height="56" rx="8" fill="rgba(99,102,241,0.08)" stroke="#6366F1" strokeWidth="1.5" />
-                <rect x="30" y="26" width="56" height="10" rx="4" fill="#EEF2FF" />
-                <rect x="30" y="42" width="74" height="10" rx="4" fill="#EEF2FF" />
-                <rect x="30" y="58" width="48" height="8" rx="4" fill="#EEF2FF" />
-                <rect x="64" y="10" width="50" height="12" rx="6" fill="rgba(100,116,139,0.15)" stroke="#64748B" strokeWidth="1" />
-              </svg>
-            ),
-          },
-          {
-            title: "History timeline",
-            desc: "Revisit saved analyses and jump back into context.",
-            svg: (
-              <svg className="h-full w-full" viewBox="0 0 140 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="18" y="22" width="104" height="44" rx="8" fill="#ECFDF5" stroke="#10B981" strokeWidth="1" />
-                <path d="M28 44 H112" stroke="#CBD5E1" strokeWidth="2" />
-                <circle cx="42" cy="44" r="5" fill="#10B981" />
-                <circle cx="70" cy="44" r="5" fill="#6366F1" />
-                <circle cx="98" cy="44" r="5" fill="#7C3AED" />
-                <rect x="32" y="28" width="20" height="6" rx="3" fill="#D1FAE5" />
-                <rect x="60" y="28" width="20" height="6" rx="3" fill="#D1FAE5" />
-                <rect x="88" y="28" width="20" height="6" rx="3" fill="#D1FAE5" />
-              </svg>
-            ),
-          },
-        ].map((card) => (
-          <div key={card.title}>
-            <div className="h-24 rounded-lg bg-[var(--color-bg-subtle)] flex items-center justify-center p-3">
-              {card.svg}
-            </div>
-            <div className="mt-4 text-sm font-semibold text-[var(--color-text-primary)]">{card.title}</div>
-            <div className="mt-1 text-sm text-[var(--color-text-secondary)]">{card.desc}</div>
+        <div className="relative min-h-[280px]">
+          <div className="h-[280px] rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] dot-grid-bg flex items-center justify-center p-6">
+            <svg viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full" role="img" aria-label="Layered architecture graph">
+              {/* Layer labels */}
+              <text x="6" y="30" fontSize="8" fill="#CBD5E1" fontWeight="600">entry</text>
+              <text x="6" y="90" fontSize="8" fill="#CBD5E1" fontWeight="600">core</text>
+              <text x="6" y="148" fontSize="8" fill="#CBD5E1" fontWeight="600">leaf</text>
+              {/* Entry */}
+              <rect x="118" y="16" width="84" height="28" rx="6" fill="#EDE9FE" stroke="#7C3AED" strokeWidth="1.5" />
+              <text x="160" y="27" textAnchor="middle" fontSize="9" fontWeight="700" fill="#4C1D95">index.js</text>
+              <text x="160" y="38" textAnchor="middle" fontSize="7.5" fill="#6D28D9">entry point</text>
+              {/* Core */}
+              <rect x="38" y="70" width="88" height="28" rx="6" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1" />
+              <text x="82" y="81" textAnchor="middle" fontSize="9" fontWeight="600" fill="#4338CA">lib/express.js</text>
+              <text x="82" y="92" textAnchor="middle" fontSize="7" fill="#6366F1">app factory</text>
+              <rect x="194" y="70" width="88" height="28" rx="6" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1" />
+              <text x="238" y="81" textAnchor="middle" fontSize="9" fontWeight="600" fill="#4338CA">router/index</text>
+              <text x="238" y="92" textAnchor="middle" fontSize="7" fill="#6366F1">router core</text>
+              {/* Edges entry → core */}
+              <line x1="145" y1="44" x2="100" y2="70" stroke="#A78BFA" strokeWidth="1.5" />
+              <line x1="175" y1="44" x2="220" y2="70" stroke="#A78BFA" strokeWidth="1.5" />
+              {/* Leaf */}
+              <rect x="14" y="130" width="72" height="24" rx="5" fill="#ECFDF5" stroke="#059669" strokeWidth="0.75" />
+              <text x="50" y="144" textAnchor="middle" fontSize="8" fill="#065F46">request.js</text>
+              <rect x="94" y="130" width="72" height="24" rx="5" fill="#ECFDF5" stroke="#059669" strokeWidth="0.75" />
+              <text x="130" y="144" textAnchor="middle" fontSize="8" fill="#065F46">response.js</text>
+              <rect x="174" y="130" width="66" height="24" rx="5" fill="#ECFDF5" stroke="#059669" strokeWidth="0.75" />
+              <text x="207" y="144" textAnchor="middle" fontSize="8" fill="#065F46">route.js</text>
+              <rect x="248" y="130" width="58" height="24" rx="5" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="0.5" />
+              <text x="277" y="144" textAnchor="middle" fontSize="8" fill="#94A3B8">depd</text>
+              {/* Edges core → leaf */}
+              <line x1="70" y1="98" x2="50" y2="130" stroke="#6EE7B7" strokeWidth="1" />
+              <line x1="95" y1="98" x2="130" y2="130" stroke="#6EE7B7" strokeWidth="1" />
+              <line x1="230" y1="98" x2="207" y2="130" stroke="#6EE7B7" strokeWidth="1" />
+              <line x1="250" y1="98" x2="277" y2="130" stroke="#CBD5E1" strokeWidth="0.75" strokeDasharray="3 2" />
+            </svg>
           </div>
-        ))}
+        </div>
       </div>
     </section>
   );

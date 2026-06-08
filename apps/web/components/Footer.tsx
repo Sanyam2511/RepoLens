@@ -32,7 +32,7 @@ export default function Footer() {
             </div>
           </div>
 
-          <div className="grid gap-8 sm:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-2">
             <div>
               <div className="micro-label">Product</div>
               <ul className="mt-4 space-y-3 text-sm text-[var(--color-text-secondary)]">
@@ -73,15 +73,6 @@ export default function Footer() {
                   </a>
                 </li>
               </ul>
-            </div>
-
-            <div>
-              <div className="micro-label">Status</div>
-              <div className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-                <span className="h-2 w-2 rounded-full bg-[var(--color-healthy)]" />
-                Systems normal
-              </div>
-              <div className="mt-3 data-mono-dense text-[var(--color-text-tertiary)]">v0.1 workspace</div>
             </div>
           </div>
         </div>
