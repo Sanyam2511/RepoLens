@@ -90,9 +90,6 @@ export default function HowItWorksPage() {
         <div className="surface-card px-6 py-8 sm:px-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-3xl">
-              <div className="badge-chip badge-accent inline-flex items-center gap-2">
-                How RepoLens works
-              </div>
               <h1 className="mt-5 hero-heading leading-tight">
                 A simple path from repository URL
                 <br />
