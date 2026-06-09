@@ -15,7 +15,6 @@ import {
   MarkerType,
   ReactFlowInstance,
 } from "@xyflow/react";
-import dagre from "dagre";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { RepoGraph } from "shared";
@@ -25,6 +24,12 @@ import { Copy, AlertTriangle, Search, X } from "lucide-react";
 const NODE_WIDTH = 260;
 const NODE_HEIGHT = 130;
 const GRID_COLS = 4;
+
+// Horizontal and vertical spacing between nodes in the layered graph
+const X_GAP = 60;   // gap between nodes on the same row
+const Y_GAP = 110;  // gap between depth levels (on top of NODE_HEIGHT)
+const Y_STEP = NODE_HEIGHT + Y_GAP;
+const X_STEP = NODE_WIDTH + X_GAP;
 
 const getDisplayName = (nodeId: string) => {
   const parts = nodeId.split("/");
@@ -60,7 +65,9 @@ const shouldShowNode = (nodeId: string, nodeType: string): boolean => {
   return true;
 };
 
-const categorizeNodeByDegree = (kind: string, inbound: number, outbound: number, path: string): NodeCategory => {
+const categorizeNodeByDegree = (
+  kind: string, inbound: number, outbound: number, path: string
+): NodeCategory => {
   if (kind === "npm-package") return "npm";
   if (kind === "api-endpoint") return "api";
   if (kind === "storage") return "storage";
@@ -73,6 +80,158 @@ const categorizeNodeByDegree = (kind: string, inbound: number, outbound: number,
   return "internal";
 };
 
+// ---------------------------------------------------------------------------
+// Sugiyama-style layered layout (BFS depth + median-heuristic X ordering)
+// ---------------------------------------------------------------------------
+//
+// The problem with the old approach: nodes at the same BFS depth were simply
+// spread evenly across X with no regard for which nodes they connect to. This
+// caused long, crossing-heavy edges because a node at depth 2 might be placed
+// far from the depth-1 node it imports from.
+//
+// This implementation does three passes:
+//
+//  Pass 1 – BFS depth assignment (same as before, "deepen but never reduce")
+//  Pass 2 – Within each depth level, sort nodes by the *median X index* of
+//            their parents (top-down) then their children (bottom-up). Two
+//            iterations of this is the classic Sugiyama crossing-minimisation
+//            heuristic and dramatically reduces tangled edges.
+//  Pass 3 – Assign final pixel X by the sorted order within each layer,
+//            centred around x=0 so fitView stays symmetric.
+//
+// The result: nodes that share parents/children cluster together horizontally,
+// making the graph readable even for dense repos.
+
+function computeLayeredLayout(
+  connectedNodes: Array<{ id: string }>,
+  connectedIds: Set<string>,
+  edgesToRender: Array<{ source: string; target: string }>,
+  adjacency: Map<string, string[]>,
+): Map<string, { x: number; y: number }> {
+
+  // ── Pass 1: BFS longest-path depth ──────────────────────────────────────
+
+  const localInDegree = new Map<string, number>();
+  connectedNodes.forEach(n => localInDegree.set(n.id, 0));
+  edgesToRender.forEach(e => {
+    if (connectedIds.has(e.source) && connectedIds.has(e.target))
+      localInDegree.set(e.target, (localInDegree.get(e.target) ?? 0) + 1);
+  });
+
+  const depthMap = new Map<string, number>();
+  const bfsQueue: string[] = [];
+
+  connectedNodes.forEach(n => {
+    if ((localInDegree.get(n.id) ?? 0) === 0) {
+      depthMap.set(n.id, 0);
+      bfsQueue.push(n.id);
+    }
+  });
+
+  const depthCap = connectedNodes.length;
+  for (let qi = 0; qi < bfsQueue.length; qi++) {
+    const nodeId = bfsQueue[qi]!;
+    const d = depthMap.get(nodeId) ?? 0;
+    if (d >= depthCap) continue;
+    for (const nb of adjacency.get(nodeId) ?? []) {
+      if (connectedIds.has(nb) && (depthMap.get(nb) ?? -1) < d + 1) {
+        depthMap.set(nb, d + 1);
+        bfsQueue.push(nb);
+      }
+    }
+  }
+  // Anything unreachable from roots (cycle islands) gets depth 0
+  connectedNodes.forEach(n => { if (!depthMap.has(n.id)) depthMap.set(n.id, 0); });
+
+  // ── Pass 2: Median-heuristic crossing minimisation ───────────────────────
+  //
+  // For each depth level, we sort nodes by the median *order index* of their
+  // parents in the layer above (top-down sweep), then by their children in
+  // the layer below (bottom-up sweep). Two sweeps is the standard Sugiyama
+  // heuristic; more sweeps give diminishing returns.
+
+  // Build layer → node list
+  const layers = new Map<number, string[]>();
+  connectedNodes.forEach(n => {
+    const d = depthMap.get(n.id) ?? 0;
+    if (!layers.has(d)) layers.set(d, []);
+    layers.get(d)!.push(n.id);
+  });
+
+  // orderIndex: the current position of a node within its layer
+  const orderIndex = new Map<string, number>();
+  layers.forEach((ids) => ids.forEach((id, i) => orderIndex.set(id, i)));
+
+  // Build reverse adjacency scoped to connected nodes
+  const reverseAdj = new Map<string, string[]>();
+  connectedNodes.forEach(n => reverseAdj.set(n.id, []));
+  edgesToRender.forEach(e => {
+    if (connectedIds.has(e.source) && connectedIds.has(e.target))
+      reverseAdj.get(e.target)?.push(e.source);
+  });
+
+  const medianOf = (indices: number[]): number => {
+    if (indices.length === 0) return 0;
+    const s = [...indices].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[mid - 1]! + s[mid]!) / 2 : s[mid]!;
+  };
+
+  const sortedDepths = Array.from(layers.keys()).sort((a, b) => a - b);
+
+  // Two full passes (top-down then bottom-up)
+  for (let pass = 0; pass < 2; pass++) {
+    // Top-down: sort by median parent index
+    for (const depth of sortedDepths) {
+      if (depth === 0) continue;
+      const layer = layers.get(depth)!;
+      layer.sort((a, b) => {
+        const parentsA = reverseAdj.get(a) ?? [];
+        const parentsB = reverseAdj.get(b) ?? [];
+        const medA = medianOf(parentsA.map(p => orderIndex.get(p) ?? 0));
+        const medB = medianOf(parentsB.map(p => orderIndex.get(p) ?? 0));
+        return medA - medB;
+      });
+      layer.forEach((id, i) => orderIndex.set(id, i));
+    }
+
+    // Bottom-up: sort by median child index
+    for (const depth of [...sortedDepths].reverse()) {
+      const layer = layers.get(depth)!;
+      layer.sort((a, b) => {
+        const childrenA = adjacency.get(a)?.filter(c => connectedIds.has(c)) ?? [];
+        const childrenB = adjacency.get(b)?.filter(c => connectedIds.has(c)) ?? [];
+        const medA = medianOf(childrenA.map(c => orderIndex.get(c) ?? 0));
+        const medB = medianOf(childrenB.map(c => orderIndex.get(c) ?? 0));
+        return medA - medB;
+      });
+      layer.forEach((id, i) => orderIndex.set(id, i));
+    }
+  }
+
+  // ── Pass 3: Assign pixel positions ──────────────────────────────────────
+  //
+  // Centre each layer around x = 0. Nodes within a layer are spaced X_STEP
+  // apart, ordered by the index we just computed.
+
+  const nodePos = new Map<string, { x: number; y: number }>();
+
+  sortedDepths.forEach(depth => {
+    const layer = layers.get(depth)!;
+    const totalWidth = layer.length * X_STEP;
+    layer.forEach((id, i) => {
+      nodePos.set(id, {
+        x: i * X_STEP - totalWidth / 2 + X_STEP / 2,
+        y: depth * Y_STEP + 60,
+      });
+    });
+  });
+
+  return nodePos;
+}
+
+// ---------------------------------------------------------------------------
+
 export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph | null }) {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node<GraphNodeData>, Edge> | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
@@ -81,11 +240,15 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [criticalPathOnly, setCriticalPathOnly] = useState(false);
+  const [showNpm, setShowNpm] = useState(false);
 
   const processedData = useMemo(() => {
     if (!graphData) return null;
 
-    const visibleNodes = graphData.nodes.filter(n => shouldShowNode(n.id, n.type));
+    const visibleNodes = graphData.nodes.filter(n => {
+      if (!showNpm && n.type === "npm-package") return false;
+      return shouldShowNode(n.id, n.type);
+    });
     const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
 
     const validEdges = graphData.edges.filter(
@@ -142,10 +305,8 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       category: categorizeNodeByDegree(n.type, inDegree.get(n.id) ?? 0, outDegree.get(n.id) ?? 0, n.id),
     }));
 
-    console.log("[detail] visible nodes:", categorizedNodes.length, "valid edges:", validEdges.length);
-
     return { nodes: categorizedNodes, edges: validEdges, inDegree, outDegree, cyclicNodes, cyclicEdges, adjacency, reverseAdjacency };
-  }, [graphData]);
+  }, [graphData, showNpm]);
 
   const mapDataToCanvas = useCallback(() => {
     if (!processedData) return;
@@ -168,43 +329,29 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     const isolatedNodes = visibleNodes.filter(n => !connectedIds.has(n.id));
 
     const positionedNodes: Node<GraphNodeData>[] = [];
-    let maxDagreY = 0;
+    let maxLayoutY = 0;
 
     if (connectedNodes.length > 0) {
-      const g = new dagre.graphlib.Graph();
-      g.setDefaultEdgeLabel(() => ({}));
-      g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 120, marginx: 60, marginy: 60 });
+      const nodePos = computeLayeredLayout(
+        connectedNodes,
+        connectedIds,
+        edgesToRender,
+        processedData.adjacency,
+      );
+
+      // Track the lowest Y so isolated nodes are placed below
+      nodePos.forEach(pos => { maxLayoutY = Math.max(maxLayoutY, pos.y); });
 
       connectedNodes.forEach(n => {
-        const w = (inDegree.get(n.id) ?? 0) > 4 ? 300 : NODE_WIDTH;
-        g.setNode(n.id, { width: w, height: NODE_HEIGHT });
-      });
-
-      edgesToRender.forEach(e => {
-        g.setEdge(e.source, e.target, { weight: cyclicEdges.has(`${e.source}->${e.target}`) ? 1 : 10 });
-      });
-
-      const hasInbound = new Set(edgesToRender.map(e => e.target));
-      const entryNodes = connectedNodes.filter(n => !hasInbound.has(n.id));
-      g.setNode("__ROOT__", { width: 1, height: 1 });
-      entryNodes.forEach(n => g.setEdge("__ROOT__", n.id, { weight: 1, minlen: 1 }));
-
-      dagre.layout(g);
-
-      connectedNodes.forEach(n => {
-        const pos = g.node(n.id);
-        if (!pos) return;
+        const pos = nodePos.get(n.id) ?? { x: 0, y: 0 };
         const w = (inDegree.get(n.id) ?? 0) > 4 ? 300 : NODE_WIDTH;
         const { filename, relativePath } = getDisplayName(n.id);
         const ext = filename.includes(".") ? filename.split(".").pop() : "";
-
-        maxDagreY = Math.max(maxDagreY, pos.y + NODE_HEIGHT);
-
         positionedNodes.push({
           id: n.id,
           targetPosition: Position.Top,
           sourcePosition: Position.Bottom,
-          position: { x: pos.x - w / 2, y: pos.y - NODE_HEIGHT / 2 },
+          position: pos,
           type: "detailNode",
           data: {
             label: filename,
@@ -224,13 +371,12 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     }
 
     if (isolatedNodes.length > 0) {
-      const startY = maxDagreY > 0 ? maxDagreY + 120 : 40;
+      const startY = maxLayoutY > 0 ? maxLayoutY + NODE_HEIGHT + 120 : 40;
       isolatedNodes.forEach((n, idx) => {
         const col = idx % GRID_COLS;
         const row = Math.floor(idx / GRID_COLS);
         const { filename, relativePath } = getDisplayName(n.id);
         const ext = filename.includes(".") ? filename.split(".").pop() : "";
-
         positionedNodes.push({
           id: n.id,
           targetPosition: Position.Top,
@@ -264,8 +410,9 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         target: edge.target,
         type: "smoothstep",
         animated: isCyclic,
-        markerEnd: { type: MarkerType.ArrowClosed, color: isCyclic ? "#EF4444" : color, width: 10, height: 10 },
-        style: { stroke: isCyclic ? "#EF4444" : color, strokeWidth: 1.5, opacity: 0.6 },
+        zIndex: -1,
+        markerEnd: { type: MarkerType.ArrowClosed, color: isCyclic ? "#991B1B" : color, width: 10, height: 10 },
+        style: { stroke: isCyclic ? "#991B1B" : color, strokeWidth: 1.5, opacity: 0.6 },
       };
     });
 
@@ -289,10 +436,10 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       return { ...n, style: { ...n.style, opacity: focused || neighbor ? 1 : 0.15 } };
     }));
     setEdges(eds => eds.map(e => {
-      if (!focusedNodeId) return { ...e, style: { ...e.style, opacity: 0.6, strokeWidth: 1.5 } };
-      if (e.source === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#6366F1" }, zIndex: 10 };
+      if (!focusedNodeId) return { ...e, style: { ...e.style, opacity: 0.6, strokeWidth: 1.5 }, zIndex: -1 };
+      if (e.source === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#232F72" }, zIndex: 10 };
       if (e.target === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#10B981" }, zIndex: 10 };
-      return { ...e, style: { ...e.style, opacity: 0.05, strokeWidth: 1 }, zIndex: 0 };
+      return { ...e, style: { ...e.style, opacity: 0.05, strokeWidth: 1 }, zIndex: -1 };
     }));
   }, [focusedNodeId, processedData, setNodes, setEdges]);
 
@@ -313,16 +460,12 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     if (target) handleNodeClick(e as any, target);
   };
 
-  const hotspotCount = useMemo(
-    () => Array.from(processedData?.inDegree.values() ?? []).filter(v => v > 4).length,
-    [processedData]
-  );
 
   return (
     <div className="relative w-full h-full bg-[var(--color-bg-base)] overflow-hidden rounded-xl dot-grid-bg">
       {/* Right panel */}
-      <div className="absolute top-4 right-4 z-10 w-72 flex flex-col gap-4">
-        <form onSubmit={handleSearch} className="compact-card p-2 flex items-center gap-2 bg-[var(--color-bg-surface)]">
+      <div className="absolute top-6 right-6 z-10 w-72 flex flex-col gap-4">
+        <form onSubmit={handleSearch} className="bg-[var(--color-bg-surface)]/80 backdrop-blur-xl border border-[var(--color-border-subtle)] rounded-2xl shadow-xl p-2 flex items-center gap-2">
           <Search className="w-4 h-4 text-[var(--color-text-tertiary)] ml-2" />
           <input
             type="text"
@@ -333,57 +476,49 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
           />
         </form>
 
-        <div className="compact-card p-4 bg-[var(--color-bg-surface)] border-r border-[var(--color-border-subtle)]">
-          <div className="micro-label mb-3">Graph Metrics</div>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <div className="metric-card">
-              <div className="micro-label">Nodes</div>
-              <div className="data-mono font-semibold text-[var(--color-text-primary)]">{nodes.length}</div>
-            </div>
-            <div className="metric-card">
-              <div className="micro-label">Edges</div>
-              <div className="data-mono font-semibold text-[var(--color-text-primary)]">{edges.length}</div>
-            </div>
-            <div className="metric-card" style={{ background: "var(--color-cycle-subtle)", borderColor: "color-mix(in srgb, var(--color-cycle) 20%, transparent)" }}>
-              <div className="micro-label" style={{ color: "var(--color-cycle)" }}>Cycles</div>
-              <div className="data-mono font-semibold" style={{ color: "var(--color-cycle)" }}>{processedData?.cyclicNodes.size ?? 0}</div>
-            </div>
-            <div className="metric-card" style={{ background: "var(--color-hotspot-subtle)", borderColor: "color-mix(in srgb, var(--color-hotspot) 20%, transparent)" }}>
-              <div className="micro-label" style={{ color: "var(--color-hotspot)" }}>Hotspots</div>
-              <div className="data-mono font-semibold" style={{ color: "var(--color-hotspot)" }}>{hotspotCount}</div>
-            </div>
-          </div>
-
-          <div className="micro-label mb-3 border-t border-[var(--color-border-subtle)] pt-3">Role Legend</div>
-          <div className="space-y-2">
+        <div className="bg-[var(--color-bg-surface)]/80 backdrop-blur-xl border border-[var(--color-border-subtle)] rounded-2xl shadow-xl p-4">
+          <div className="micro-label mb-2">Role Legend</div>
+          <div className="flex flex-wrap gap-x-3 gap-y-2">
             {Object.entries(ROLE_COLORS).map(([role, colors]) => (
-              <div key={role} className="flex items-center gap-2 ui-label text-[var(--color-text-secondary)] capitalize">
-                <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
+              <div key={role} className="flex items-center gap-1.5 ui-label text-[var(--color-text-secondary)] capitalize text-xs">
+                <span className="w-2.5 h-2.5 rounded-sm border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
                 {role}
               </div>
             ))}
           </div>
 
-          <button
-            onClick={() => setCriticalPathOnly(p => !p)}
-            className={`mt-4 w-full py-2 micro-label rounded-lg border transition ${
-              criticalPathOnly
-                ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
-                : "bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)] border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            {criticalPathOnly ? "Show All Files" : "Connected Only"}
-          </button>
+          <div className="mt-5 flex gap-2">
+            <button
+              onClick={() => setCriticalPathOnly(p => !p)}
+              className={`flex-1 py-2 text-xs font-medium rounded-xl transition-all ${
+                criticalPathOnly
+                  ? "bg-[var(--color-accent)]/90 text-white shadow-md border border-transparent"
+                  : "bg-[var(--color-bg-subtle)]/50 text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              {criticalPathOnly ? "Show All" : "Connected"}
+            </button>
+            <button
+              onClick={() => setShowNpm(p => !p)}
+              className={`flex-1 py-2 text-xs font-medium rounded-xl transition-all ${
+                showNpm
+                  ? "bg-[var(--color-node-npm)]/90 text-white shadow-md border border-transparent"
+                  : "bg-[var(--color-bg-subtle)]/50 text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              {showNpm ? "Hide NPM" : "Show NPM"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Left inspect panel */}
+      {/* Right inspect panel (Overlay) */}
       <div
-        className={`absolute top-4 left-4 z-20 w-80 compact-card bg-[var(--color-bg-surface)] flex flex-col transition-all duration-300 transform ${
-          focusedNodeId ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0 pointer-events-none"
+        className={`absolute top-0 right-0 bottom-0 z-30 w-96 bg-[var(--color-bg-surface)]/95 backdrop-blur-2xl border-l border-[var(--color-border-subtle)] shadow-2xl flex flex-col transition-all duration-300 transform ${
+          focusedNodeId ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
         }`}
       >
-        <div className="p-4 border-b border-[var(--color-border-subtle)] flex items-start justify-between">
+        <div className="p-5 border-b border-[var(--color-border-subtle)]/50 flex items-start justify-between">
           <div className="min-w-0 pr-4">
             <div className="micro-label mb-1">Inspecting</div>
             <div className="font-semibold text-[var(--color-text-primary)] truncate">{focusedNodeData?.label}</div>
@@ -396,7 +531,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
           </button>
         </div>
 
-        <div className="p-4 max-h-[60vh] overflow-y-auto space-y-5">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <button
             onClick={() => navigator.clipboard.writeText(focusedNodeData?.rawLabel ?? "")}
             className="w-full flex items-center justify-center gap-2 btn-secondary py-2 text-xs"

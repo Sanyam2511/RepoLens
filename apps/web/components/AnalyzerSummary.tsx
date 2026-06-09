@@ -32,10 +32,10 @@ const METRIC_LABELS: Record<SummaryMetricId, string> = {
 };
 
 const METRIC_COLORS: Record<SummaryMetricId, string> = {
-  coupling: "#EF4444",
+  coupling: "#991B1B",
   cohesion: "#10B981",
-  surface: "#6366F1",
-  complexity: "#7C3AED",
+  surface: "#232F72",
+  complexity: "#8B5CF6",
   risk: "#F59E0B",
 };
 

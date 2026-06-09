@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -11,10 +11,13 @@ import {
   Position,
   ReactFlow,
   ReactFlowInstance,
+  useNodesState,
+  useEdgesState,
 } from "@xyflow/react";
 import dagre from "dagre";
 import { RepoGraph } from "shared";
 import { NODE_TYPES, type GraphNodeData } from "./GraphNodes";
+import { Copy, X } from "lucide-react";
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 76;
@@ -43,17 +46,18 @@ const hashString = (value: string) => {
 
 const getDynamicColor = (key: string) => {
   const lower = key.toLowerCase();
-  if (lower.includes("web") || lower.includes("frontend") || lower.includes("pages")) return "#7C3AED";
-  if (lower.includes("worker") || lower.includes("backend") || lower.includes("api") || lower.includes("analyzer")) return "#059669";
-  if (lower.includes("shared") || lower.includes("core") || lower.includes("types")) return "#6366F1";
-  const DYNAMIC_COLORS = ["#7C3AED", "#6366F1", "#0891B2", "#059669", "#64748B"];
+  if (lower.includes("web") || lower.includes("frontend") || lower.includes("pages")) return "#8B5CF6";
+  if (lower.includes("worker") || lower.includes("backend") || lower.includes("api") || lower.includes("analyzer")) return "#10B981";
+  if (lower.includes("shared") || lower.includes("core") || lower.includes("types")) return "#232F72";
+  const DYNAMIC_COLORS = ["#8B5CF6", "#232F72", "#3B82F6", "#10B981", "#94A3B8"];
   return DYNAMIC_COLORS[hashString(key) % DYNAMIC_COLORS.length];
 };
 
-const getNodeCategoryAndAccent = (layer: number, key: string) => {
-  if (layer === 0) return { category: "leaf", accent: "#64748B" };
-  if (layer === 4) return { category: "hotspot", accent: "#F59E0B" };
-  if (layer === 5) return { category: "npm", accent: "#64748B" };
+const getNodeCategoryAndAccent = (kind: string, key: string) => {
+  if (kind === "npm-package") return { category: "npm", accent: "#94A3B8" };
+  if (kind === "api-endpoint") return { category: "api", accent: "#8B5CF6" };
+  if (kind === "storage") return { category: "storage", accent: "#3B82F6" };
+  if (kind === "folder") return { category: "internal", accent: getDynamicColor(key) };
   return { category: "internal", accent: getDynamicColor(key) };
 };
 
@@ -68,8 +72,8 @@ const isRelevantNode = (pathSegments: string[], fileName: string) => {
   return true;
 };
 
-const buildArchitectureTree = (graphData: RepoGraph | null) => {
-  if (!graphData) return { nodes: [], edges: [] };
+const buildArchitectureTree = (graphData: RepoGraph | null, showNpm: boolean) => {
+  if (!graphData) return { nodes: [], edges: [], adjacency: new Map(), reverseAdjacency: new Map(), moduleInternalFiles: new Map<string, string[]>() };
 
   const filePaths = graphData.nodes.filter(n => n.type === "file").map(n => n.id);
   const repoRoot = getCommonPathPrefix(filePaths);
@@ -79,10 +83,12 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
   const visualEdges = new Map<string, Edge>();
   const fileToVisualMap = new Map<string, string>();
   const moduleFileCounts = new Map<string, number>();
+  const moduleInternalFiles = new Map<string, string[]>();
+  const edgeImportCounts = new Map<string, number>();
 
-  const createVisualNode = (id: string, label: string, layer: number, kind: any, sublabel: string, rootKeyForColor: string) => {
+  const createVisualNode = (id: string, label: string, kind: any, sublabel: string, rootKeyForColor: string) => {
     if (visualNodes.has(id)) return;
-    const { category, accent } = getNodeCategoryAndAccent(layer, rootKeyForColor);
+    const { category, accent } = getNodeCategoryAndAccent(kind, rootKeyForColor);
 
     visualNodes.set(id, {
       id,
@@ -93,8 +99,8 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
     });
   };
 
-  const createEdge = (source: string, target: string, type: "struct" | "import", isCross: boolean, color: string) => {
-    const edgeId = `${type}-${source}->${target}`;
+  const createStructEdge = (source: string, target: string, color: string) => {
+    const edgeId = `struct-${source}->${target}`;
     if (visualEdges.has(edgeId) || source === target) return;
 
     visualEdges.set(edgeId, {
@@ -103,31 +109,21 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
       target,
       type: "smoothstep",
       animated: false,
-      markerEnd: type === "import" ? { type: MarkerType.ArrowClosed, color: isCross ? "#F59E0B" : color, width: 10, height: 10 } : undefined,
+      zIndex: -1,
       style: {
-        stroke: type === "import" && isCross ? "#F59E0B" : color,
-        strokeWidth: type === "struct" ? 1 : 1.4,
-        opacity: type === "struct" ? 0.3 : 0.7,
-        strokeDasharray: type === "import" && isCross ? "5 5" : "none",
+        stroke: color,
+        strokeWidth: 1,
+        opacity: 0.3,
+        strokeDasharray: "none",
       },
     });
   };
 
-  const inboundCount = new Map<string, number>();
-  const connectsToExternal = new Set<string>();
-
-  graphData.edges.forEach(edge => {
-    inboundCount.set(edge.target, (inboundCount.get(edge.target) ?? 0) + 1);
-    const targetNode = graphData.nodes.find(n => n.id === edge.target);
-    if (targetNode?.type === "npm-package" || targetNode?.type === "api-endpoint" || targetNode?.type === "storage") {
-      connectsToExternal.add(edge.source);
-    }
-  });
-
   graphData.nodes.forEach((node) => {
+    if (!showNpm && node.type === "npm-package") return;
+
     if (node.type === "npm-package" || node.type === "api-endpoint" || node.type === "storage") {
-      const layer = node.type === "npm-package" ? 5 : 3;
-      createVisualNode(node.id, node.label, layer, node.type, node.type.replace("-", " "), "npm");
+      createVisualNode(node.id, node.label, node.type, node.type.replace("-", " "), "npm");
       fileToVisualMap.set(node.id, node.id);
       return;
     }
@@ -137,14 +133,9 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
     if (!isRelevantNode(relSegments, fileName)) return;
 
     if (relSegments.length <= 1 || fileName.includes("docker")) {
-      createVisualNode(node.id, fileName, 0, "file", "workspace root", "root");
-      fileToVisualMap.set(node.id, node.id);
-      return;
-    }
-
-    if (fileName.includes("types") || fileName.includes("interfaces") || relSegments.includes("types") || relSegments.includes("shared")) {
-      createVisualNode(node.id, fileName, 4, "file", "cross-package boundary", "shared");
-      fileToVisualMap.set(node.id, node.id);
+      createVisualNode("workspace-root", "workspace root", "folder", "workspace root", "root");
+      fileToVisualMap.set(node.id, "workspace-root");
+      moduleFileCounts.set("workspace-root", (moduleFileCounts.get("workspace-root") ?? 0) + 1);
       return;
     }
 
@@ -160,32 +151,29 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
 
     const pkgColorKey = packageId;
 
-    createVisualNode(packageId, packageId, 1, "folder", "workspace package", pkgColorKey);
+    createVisualNode(packageId, packageId, "folder", "workspace package", pkgColorKey);
 
     if (moduleId !== packageId) {
       const modLabel = splitPath(moduleId).pop() + "/";
-      createVisualNode(moduleId, modLabel, 2, "folder", "core module", pkgColorKey);
-      createEdge(packageId, moduleId, "struct", false, getDynamicColor(pkgColorKey));
+      createVisualNode(moduleId, modLabel, "folder", "core module", pkgColorKey);
+      createStructEdge(packageId, moduleId, getDynamicColor(pkgColorKey));
     }
 
-    const isEntryPoint = /^(index|main|server|app|page|layout|route)\./i.test(fileName);
-    const isHotspot = (inboundCount.get(node.id) ?? 0) > 3;
-    const talksExternal = connectsToExternal.has(node.id);
-
-    if (isEntryPoint || isHotspot || talksExternal) {
-      const sublabel = isEntryPoint ? "entry point" : talksExternal ? "boundary logic" : "architecture node";
-      createVisualNode(node.id, fileName, 3, "file", sublabel, pkgColorKey);
-      createEdge(moduleId, node.id, "struct", false, getDynamicColor(pkgColorKey));
-      fileToVisualMap.set(node.id, node.id);
-    } else {
-      fileToVisualMap.set(node.id, moduleId);
-      moduleFileCounts.set(moduleId, (moduleFileCounts.get(moduleId) ?? 0) + 1);
+    fileToVisualMap.set(node.id, moduleId);
+    moduleFileCounts.set(moduleId, (moduleFileCounts.get(moduleId) ?? 0) + 1);
+    
+    const fileNameDisplay = splitPath(node.id).pop() || node.id;
+    if (!moduleInternalFiles.has(moduleId)) {
+      moduleInternalFiles.set(moduleId, []);
     }
+    moduleInternalFiles.get(moduleId)?.push(fileNameDisplay);
   });
 
   moduleFileCounts.forEach((count, moduleId) => {
     const vNode = visualNodes.get(moduleId);
-    if (vNode) vNode.data.sublabel = `module · ${count} internal files`;
+    if (vNode) {
+      vNode.data.sublabel = count === 1 ? `module · 1 internal file` : `module · ${count} internal files`;
+    }
   });
 
   graphData.edges.forEach((edge) => {
@@ -193,14 +181,41 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
     const visTarget = fileToVisualMap.get(edge.target);
     if (!visSource || !visTarget || visSource === visTarget) return;
 
-    const sourceColor = visualNodes.get(visSource)?.data.accent ?? "#64748b";
-    const targetColor = visualNodes.get(visTarget)?.data.accent ?? "#64748b";
-    createEdge(visSource, visTarget, "import", sourceColor !== targetColor, sourceColor);
+    const edgeId = `import-${visSource}->${visTarget}`;
+    edgeImportCounts.set(edgeId, (edgeImportCounts.get(edgeId) ?? 0) + 1);
+  });
+
+  edgeImportCounts.forEach((count, edgeId) => {
+    const parts = edgeId.replace("import-", "").split("->");
+    const source = parts[0]!;
+    const target = parts[1]!;
+    const sourceColor = visualNodes.get(source)?.data.accent ?? "#64748b";
+    const targetColor = visualNodes.get(target)?.data.accent ?? "#64748b";
+    const isCross = sourceColor !== targetColor;
+
+    visualEdges.set(edgeId, {
+      id: edgeId,
+      source,
+      target,
+      type: "smoothstep",
+      animated: false,
+      zIndex: -1,
+      markerEnd: { type: MarkerType.ArrowClosed, color: isCross ? "#F59E0B" : sourceColor, width: 10, height: 10 },
+      style: {
+        stroke: isCross ? "#F59E0B" : sourceColor,
+        strokeWidth: Math.min(1.5 + Math.log1p(count) * 1.5, 6),
+        opacity: 0.8,
+        strokeDasharray: isCross ? "5 5" : "none",
+      },
+      data: {
+        importCount: count,
+      }
+    });
   });
 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 90, align: 'UL' });
+  dagreGraph.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 100, align: 'UL' });
 
   const finalNodes = Array.from(visualNodes.values());
   const finalEdges = Array.from(visualEdges.values());
@@ -234,41 +249,211 @@ const buildArchitectureTree = (graphData: RepoGraph | null) => {
     };
   });
 
-  return { nodes: positionedNodes, edges: finalEdges };
+  // Calculate adjacency for interactions (only including imports, not struct edges)
+  const adjacency = new Map<string, string[]>();
+  const reverseAdjacency = new Map<string, string[]>();
+
+  positionedNodes.forEach(n => {
+    adjacency.set(n.id, []);
+    reverseAdjacency.set(n.id, []);
+  });
+
+  finalEdges.forEach(e => {
+    if (e.id.startsWith("import-")) {
+      adjacency.get(e.source)?.push(e.target);
+      reverseAdjacency.get(e.target)?.push(e.source);
+    }
+  });
+
+  return { nodes: positionedNodes, edges: finalEdges, adjacency, reverseAdjacency, moduleInternalFiles };
 };
 
 export default function ArchitectureOverview({ graphData }: { graphData: RepoGraph | null }) {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node<GraphNodeData>, Edge> | null>(null);
-  const { nodes, edges } = useMemo(() => buildArchitectureTree(graphData), [graphData]);
+  
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const [showNpm, setShowNpm] = useState(false);
+
+  const tree = useMemo(() => buildArchitectureTree(graphData, showNpm), [graphData, showNpm]);
 
   useEffect(() => {
-    if (rfInstance && nodes.length > 0) {
+    setNodes(tree.nodes);
+    setEdges(tree.edges);
+  }, [tree, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!tree) return;
+    
+    setNodes(nds => nds.map(n => {
+      if (!focusedNodeId) return { ...n, style: { ...n.style, opacity: 1 } };
+      const focused = n.id === focusedNodeId;
+      const neighbor = tree.adjacency.get(focusedNodeId)?.includes(n.id)
+        || tree.reverseAdjacency.get(focusedNodeId)?.includes(n.id);
+      return { ...n, style: { ...n.style, opacity: focused || neighbor ? 1 : 0.15 } };
+    }));
+
+    setEdges(eds => eds.map(e => {
+      const isStruct = e.id.startsWith("struct-");
+      const defaultOpacity = isStruct ? 0.3 : 0.8;
+      const defaultStrokeWidth = isStruct ? 1 : (e.style?.strokeWidth ?? 1);
+      
+      if (!focusedNodeId) return { ...e, style: { ...e.style, opacity: defaultOpacity, strokeWidth: defaultStrokeWidth }, zIndex: -1 };
+      
+      if (e.source === focusedNodeId && !isStruct) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: Math.max(3, defaultStrokeWidth as number), stroke: "#232F72" }, zIndex: 10 };
+      if (e.target === focusedNodeId && !isStruct) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: Math.max(3, defaultStrokeWidth as number), stroke: "#10B981" }, zIndex: 10 };
+      
+      return { ...e, style: { ...e.style, opacity: 0.05, strokeWidth: 1 }, zIndex: -1 };
+    }));
+  }, [focusedNodeId, tree, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (rfInstance && tree.nodes.length > 0) {
       setTimeout(() => rfInstance.fitView({ padding: 0.15, duration: 800, minZoom: 0.01 }), 50);
     }
-  }, [rfInstance, nodes]);
+  }, [rfInstance, tree.nodes]);
 
-  const layerLabels = [
-    "Layer 0 · Monorepo Root",
-    "Layer 1 · Packages",
-    "Layer 2 · Core Modules",
-    "Layer 3 · Leaf Modules",
-    "Layer 4 · Shared Boundaries",
-    "Layer 5 · External Dependencies",
-  ];
+  const focusedNodeData = useMemo(
+    () => nodes.find(n => n.id === focusedNodeId)?.data as GraphNodeData | undefined,
+    [nodes, focusedNodeId]
+  );
+
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setFocusedNodeId(node.id);
+    const w = (node.data as GraphNodeData).width as number ?? NODE_WIDTH;
+    if (rfInstance) {
+      rfInstance.setCenter(node.position.x + w / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 0.9, duration: 600 });
+    }
+  }, [rfInstance]);
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] dot-grid-bg">
-      <div className="pointer-events-none absolute left-6 top-6 z-10 space-y-3 micro-label text-[var(--color-text-tertiary)]">
-        {layerLabels.map(l => <div key={l}>{l}</div>)}
+      
+      {/* Right control panel */}
+      <div className="absolute top-6 right-6 z-20">
+        <button
+          onClick={() => setShowNpm(p => !p)}
+          className={`px-4 py-2 text-xs font-medium rounded-full backdrop-blur-md shadow-sm transition-all ${
+            showNpm
+              ? "bg-[var(--color-node-npm)]/90 text-white border border-transparent"
+              : "bg-[var(--color-bg-surface)]/80 text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-surface)] hover:text-[var(--color-text-primary)]"
+          }`}
+        >
+          {showNpm ? "Hide NPM Packages" : "Show NPM Packages"}
+        </button>
+      </div>
+
+      {/* Left inspect panel */}
+      <div
+        className={`absolute top-0 right-0 bottom-0 z-30 w-96 bg-[var(--color-bg-surface)]/95 backdrop-blur-2xl border-l border-[var(--color-border-subtle)] shadow-2xl flex flex-col transition-all duration-300 transform ${
+          focusedNodeId ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="p-5 border-b border-[var(--color-border-subtle)]/50 flex items-start justify-between">
+          <div className="min-w-0 pr-4">
+            <div className="micro-label mb-1">Inspecting</div>
+            <div className="font-semibold text-[var(--color-text-primary)] truncate">{focusedNodeData?.label}</div>
+            <div className="data-mono-dense text-[var(--color-text-tertiary)] truncate" title={focusedNodeData?.sublabel}>
+              {focusedNodeData?.sublabel}
+            </div>
+          </div>
+          <button onClick={() => setFocusedNodeId(null)} className="p-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-subtle)] rounded-md">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <button
+            onClick={() => navigator.clipboard.writeText(focusedNodeData?.rawLabel ?? "")}
+            className="w-full flex items-center justify-center gap-2 btn-secondary py-2 text-xs"
+          >
+            <Copy className="w-3 h-3" /> Copy Path
+          </button>
+
+          <div>
+            <div className="flex items-center justify-between micro-label mb-2">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[var(--color-healthy)]" /> Imported By
+              </span>
+              <span className="data-mono-dense">{tree.reverseAdjacency.get(focusedNodeId!)?.length ?? 0}</span>
+            </div>
+            <div className="space-y-1 mt-2">
+              {Array.from<string>(tree.reverseAdjacency.get(focusedNodeId!) || []).map((id: string) => {
+                const targetNode = nodes.find(n => n.id === id);
+                return (
+                  <div
+                    key={id}
+                    className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
+                    onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
+                  >
+                    {targetNode?.data.label ?? id}
+                  </div>
+                );
+              })}
+              {!tree.reverseAdjacency.get(focusedNodeId!)?.length && (
+                <div className="ui-label text-[var(--color-text-tertiary)] italic">No inbound imports.</div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between micro-label mb-2">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[var(--color-accent)]" /> Imports
+              </span>
+              <span className="data-mono-dense">{tree.adjacency.get(focusedNodeId!)?.length ?? 0}</span>
+            </div>
+            <div className="space-y-1 mt-2">
+              {Array.from<string>(tree.adjacency.get(focusedNodeId!) || []).map((id: string) => {
+                const targetNode = nodes.find(n => n.id === id);
+                return (
+                  <div
+                    key={id}
+                    className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
+                    onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
+                  >
+                    {targetNode?.data.label ?? id}
+                  </div>
+                );
+              })}
+              {!tree.adjacency.get(focusedNodeId!)?.length && (
+                <div className="ui-label text-[var(--color-text-tertiary)] italic">No outbound imports.</div>
+              )}
+            </div>
+          </div>
+
+          {tree.moduleInternalFiles.get(focusedNodeId!) && tree.moduleInternalFiles.get(focusedNodeId!)!.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between micro-label mb-2">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-[var(--color-text-tertiary)]" /> Internal Files
+                </span>
+                <span className="data-mono-dense">{tree.moduleInternalFiles.get(focusedNodeId!)?.length}</span>
+              </div>
+              <div className="space-y-1">
+                {tree.moduleInternalFiles.get(focusedNodeId!)?.map(fileName => (
+                  <div key={fileName} className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)]/40 px-2 py-1.5 rounded truncate" title={fileName}>
+                    {fileName}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <ReactFlow<Node<GraphNodeData>, Edge>
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick as any}
+        onPaneClick={() => setFocusedNodeId(null)}
         nodesDraggable={false}
         nodesConnectable={false}
-        elementsSelectable={false}
+        elementsSelectable={true}
         panOnDrag={true}
         panOnScroll={true}
         zoomOnPinch={true}
@@ -284,3 +469,4 @@ export default function ArchitectureOverview({ graphData }: { graphData: RepoGra
     </div>
   );
 }
+
