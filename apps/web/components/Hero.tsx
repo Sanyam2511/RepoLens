@@ -38,10 +38,10 @@ function GraphNode({
 function HeroSchematic() {
   const W = 280;
   const H = 220;
-  const api = { x: 20, y: 16, w: 90, h: 46, color: "#7C3AED", label: "API", sub: "routes/" };
-  const core = { x: 170, y: 16, w: 90, h: 46, color: "#6366F1", label: "Core", sub: "lib/utils" };
-  const router = { x: 95, y: 88, w: 90, h: 46, color: "#059669", label: "Router", sub: "middleware" };
-  const storage = { x: 95, y: 160, w: 90, h: 46, color: "#0891B2", label: "Storage", sub: "db/client" };
+  const api = { x: 20, y: 16, w: 90, h: 46, color: "#8B5CF6", label: "API", sub: "routes/" };
+  const core = { x: 170, y: 16, w: 90, h: 46, color: "#232F72", label: "Core", sub: "lib/utils" };
+  const router = { x: 95, y: 88, w: 90, h: 46, color: "#10B981", label: "Router", sub: "middleware" };
+  const storage = { x: 95, y: 160, w: 90, h: 46, color: "#3B82F6", label: "Storage", sub: "db/client" };
 
   const port = (n: typeof api, side: "top" | "bottom") => ({
     x: n.x + n.w / 2,
@@ -64,9 +64,9 @@ function HeroSchematic() {
         </marker>
       </defs>
       <rect x="8" y="6" width={W - 16} height={H - 12} rx="10" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="5 4" />
-      {edgeDown(apiBot.x, apiBot.y, routerTop.x - 14, routerTop.y, "#7C3AED")}
-      {edgeDown(coreBot.x, coreBot.y, routerTop.x + 14, routerTop.y, "#6366F1")}
-      {edgeDown(routerBot.x, routerBot.y, storageTop.x, storageTop.y, "#0891B2")}
+      {edgeDown(apiBot.x, apiBot.y, routerTop.x - 14, routerTop.y, "#8B5CF6")}
+      {edgeDown(coreBot.x, coreBot.y, routerTop.x + 14, routerTop.y, "#232F72")}
+      {edgeDown(routerBot.x, routerBot.y, storageTop.x, storageTop.y, "#3B82F6")}
       <path d={`M ${api.x + api.w} ${api.y + 23} H ${core.x - 6}`} fill="none" stroke="#CBD5E1" strokeWidth="1" strokeDasharray="3 3" markerEnd="url(#heroArrow)" />
       <GraphNode {...api} />
       <GraphNode {...core} />
@@ -101,7 +101,7 @@ export default function Hero() {
           </p>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <Link href="#analyze" className="btn-primary">
+            <Link href="/analyze" className="btn-primary">
               Start analysis <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/history" className="btn-ghost">
@@ -115,7 +115,7 @@ export default function Hero() {
               <span className="flex-1 truncate text-left data-mono text-[var(--color-text-tertiary)]">
                 https://github.com/org/repo
               </span>
-              <Link href="#analyze" className="badge-chip badge-accent shrink-0">
+              <Link href="/analyze" className="badge-chip badge-accent shrink-0">
                 Analyze
               </Link>
             </div>

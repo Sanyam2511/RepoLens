@@ -35,12 +35,12 @@
   --color-healthy-subtle: #ECFDF5;
 
   /* Graph node roles */
-  --color-node-entry: #7C3AED;
-  --color-node-core: #6366F1;
-  --color-node-reqres: #059669;
-  --color-node-npm: #64748B;
-  --color-node-storage: #0891B2;
-  --color-node-api: #7C3AED;
+  --color-node-entry: #8B5CF6;
+  --color-node-core: #232F72;
+  --color-node-reqres: #10B981;
+  --color-node-npm: #94A3B8;
+  --color-node-storage: #3B82F6;
+  --color-node-api: #8B5CF6;
 
   /* Shadows */
   --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.08);

@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Brain,
   CheckCircle2,
-  FileSearch,
   GitBranch,
   PlugZap,
-  ShieldCheck,
   AlertTriangle,
   Circle,
   ArrowRight,
@@ -27,8 +25,10 @@ const QA_PAIRS = [
 function AnalyticsBlock() {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    if (!isHovered) return;
     const interval = setInterval(() => {
       setVisible(false);
       setTimeout(() => {
@@ -37,12 +37,12 @@ function AnalyticsBlock() {
       }, 350);
     }, 2800);
     return () => clearInterval(interval);
-  }, []);
+  }, [isHovered]);
 
   const pair = QA_PAIRS[index];
 
   return (
-    <div className="surface-card repo-capability-card p-4 lg:col-start-1 lg:row-start-1 overflow-hidden">
+    <div className="surface-card repo-capability-card p-4 lg:col-start-1 lg:row-start-1 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Architecture Q&amp;A</h3>
       </div>
@@ -101,8 +101,10 @@ function MemoryBlock() {
   const [activeDoc, setActiveDoc] = useState(0);
   const [stateIdx, setStateIdx] = useState(0);
   const [brainPulse, setBrainPulse] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    if (!isHovered) return;
     const docInterval = setInterval(() => {
       setActiveDoc((d) => {
         const next = (d + 1) % 12;
@@ -115,13 +117,13 @@ function MemoryBlock() {
       });
     }, 220);
     return () => clearInterval(docInterval);
-  }, []);
+  }, [isHovered]);
 
   return (
-    <div className="repo-memory-card repo-capability-card relative overflow-hidden rounded-xl p-6 text-white lg:col-start-2 lg:row-span-2 lg:row-start-1">
+    <div className="repo-memory-card repo-capability-card relative overflow-hidden rounded-xl p-6 text-white lg:col-start-2 lg:row-span-2 lg:row-start-1" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="relative z-10 text-center">
-        <h3 className="text-xl font-semibold text-white">RepoLens Memory</h3>
-        <p className="mx-auto mt-2 max-w-sm text-sm text-white/75">
+        <h3 className="text-xl font-semibold !text-white">RepoLens Memory</h3>
+        <p className="mx-auto mt-2 max-w-sm text-sm !text-white/75">
           Every scan teaches the workspace what changed, what matters, and where risk keeps returning.
         </p>
       </div>
@@ -193,26 +195,28 @@ const ROUTES = [
 ];
 
 const RISK_COLORS = {
-  high: { edge: "#EF4444", badge: "bg-red-100 text-red-700 border-red-200", label: "High" },
+  high: { edge: "#991B1B", badge: "bg-red-100 text-red-700 border-red-200", label: "High" },
   medium: { edge: "#F59E0B", badge: "bg-amber-100 text-amber-700 border-amber-200", label: "Watch" },
   low: { edge: "#10B981", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "Safe" },
 };
 
 function ReviewBlock() {
   const [activeRoute, setActiveRoute] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    if (!isHovered) return;
     const interval = setInterval(() => {
       setActiveRoute((r) => (r + 1) % ROUTES.length);
     }, 1800);
     return () => clearInterval(interval);
-  }, []);
+  }, [isHovered]);
 
   const route = ROUTES[activeRoute];
   const colors = RISK_COLORS[route?.risk as keyof typeof RISK_COLORS];
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-start-1 overflow-hidden">
+    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-start-1 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-1">
         <h3 className="text-lg font-semibold">Review Routing</h3>
       </div>
@@ -284,8 +288,10 @@ const TRAIL_STEPS = [
 function AuditBlock() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    if (!isHovered) return;
     if (done) {
       const reset = setTimeout(() => { setStep(0); setDone(false); }, 1800);
       return () => clearTimeout(reset);
@@ -298,10 +304,10 @@ function AuditBlock() {
       }
     }, 900);
     return () => clearTimeout(t);
-  }, [step, done]);
+  }, [step, done, isHovered]);
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-1 lg:row-span-2 lg:row-start-2 overflow-hidden">
+    <div className="surface-card repo-capability-card p-3 lg:col-start-1 lg:row-span-2 lg:row-start-2 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Change Trail</h3>
       </div>
@@ -363,17 +369,19 @@ function AuditBlock() {
 }
 
 const INTEGRATIONS = [
-  { label: "GitHub PR", icon: "GH", color: "#6366F1", detail: "Blast radius attached" },
-  { label: "Slack", icon: "SL", color: "#059669", detail: "7 hotspots notified" },
-  { label: "CI/CD", icon: "CI", color: "#0891B2", detail: "Quality gate passed" },
+  { label: "GitHub PR", icon: "GH", color: "#232F72", detail: "Blast radius attached" },
+  { label: "Slack", icon: "SL", color: "#10B981", detail: "7 hotspots notified" },
+  { label: "CI/CD", icon: "CI", color: "#3B82F6", detail: "Quality gate passed" },
   { label: "Jira", icon: "JR", color: "#F59E0B", detail: "3 issues created" },
 ];
 
 function IntegrationsBlock() {
   const [active, setActive] = useState(0);
   const [sending, setSending] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    if (!isHovered) return;
     const interval = setInterval(() => {
       setSending(true);
       setTimeout(() => {
@@ -382,10 +390,10 @@ function IntegrationsBlock() {
       }, 600);
     }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isHovered]);
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-2 lg:row-start-3 overflow-hidden">
+    <div className="surface-card repo-capability-card p-3 lg:col-start-2 lg:row-start-3 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Integrations</h3>
       </div>
@@ -443,8 +451,10 @@ const MATCH_CATEGORIES = [
 function MatchBlock() {
   const [phase, setPhase] = useState(0);
   const [matched, setMatched] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
+    if (!isHovered) return;
     const interval = setInterval(() => {
       setPhase((p) => {
         if (p >= 3) {
@@ -456,10 +466,10 @@ function MatchBlock() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isHovered]);
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-span-2 lg:row-start-2 overflow-hidden">
+    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-span-2 lg:row-start-2 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Dependency Match</h3>
       </div>
@@ -478,7 +488,7 @@ function MatchBlock() {
               className="flex items-center gap-3 rounded-lg  border-[var(--color-border-subtle)] px-4 py-3 transition-all duration-400"
               style={{
                 borderColor: isDone ? cat.color + "55" : isScanning ? cat.color + "44" : "var(--color-border-subtle)",
-                background: isDone ? cat.color.replace("var(--color-node-core)", "#6366f1").replace("var(--color-node-api)", "#7c3aed").replace("var(--color-node-storage)", "#0891b2") + "0d" : "transparent",
+                background: isDone ? cat.color.replace("var(--color-node-core)", "#232f72").replace("var(--color-node-api)", "#8b5cf6").replace("var(--color-node-storage)", "#3b82f6") + "0d" : "transparent",
               }}
             >
               <span

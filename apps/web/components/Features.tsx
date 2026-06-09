@@ -1,48 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-function NodeCard({
-  label,
-  sub,
-  color,
-  active = false,
-}: {
-  label: string;
-  sub?: string;
-  color: string;
-  active?: boolean;
-}) {
-  return (
-    <div
-      className="rounded-lg border px-3 py-2 transition-all duration-300"
-      style={{
-        borderColor: active ? color : "#E2E8F0",
-        background: active ? color + "12" : "#F8FAFC",
-        boxShadow: active ? `0 0 0 1px ${color}33` : "none",
-      }}
-    >
-      <div
-        className="text-[11px] font-semibold"
-        style={{ color: active ? color : "#475569" }}
-      >
-        {label}
-      </div>
-      {sub && (
-        <div className="font-mono text-[10px] text-slate-400 mt-0.5">{sub}</div>
-      )}
-    </div>
-  );
-}
+import { useEffect, useState } from "react";
 
 function InteractiveGraphIllustration() {
   const [active, setActive] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
 
   const nodes = [
-    { id: 0, label: "index.js", sub: "entry", color: "#7C3AED", x: 48, y: 18 },
-    { id: 1, label: "app.js", sub: "core", color: "#6366F1", x: 10, y: 52 },
-    { id: 2, label: "router.js", sub: "core", color: "#6366F1", x: 86, y: 52 },
-    { id: 3, label: "request.js", sub: "req/res", color: "#059669", x: 10, y: 82 },
-    { id: 4, label: "response.js", sub: "req/res", color: "#059669", x: 86, y: 82 },
+    { id: 0, label: "index.js", sub: "entry", color: "#8B5CF6", x: 48, y: 18 },
+    { id: 1, label: "app.js", sub: "core", color: "#232F72", x: 10, y: 52 },
+    { id: 2, label: "router.js", sub: "core", color: "#232F72", x: 86, y: 52 },
+    { id: 3, label: "request.js", sub: "req/res", color: "#10B981", x: 10, y: 82 },
+    { id: 4, label: "response.js", sub: "req/res", color: "#10B981", x: 86, y: 82 },
   ];
 
   const edges = [
@@ -56,15 +25,17 @@ function InteractiveGraphIllustration() {
     .filter((n) => n !== active);
 
   useEffect(() => {
-    const t = setInterval(() => setActive((a) => (a + 1) % nodes.length), 1800);
+    if (!isHovered) return;
+    setActive((a) => (a + 1) % nodes.length);
+    const t = setInterval(() => setActive((a) => (a + 1) % nodes.length), 1200);
     return () => clearInterval(t);
-  }, []);
+  }, [isHovered, nodes.length]);
 
   const W = 240, H = 140;
   const px = (pct: number, total: number) => (pct / 100) * total;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       {edges.map((e, i) => {
         const from = nodes[e.from];
         const to = nodes[e.to];
@@ -131,31 +102,34 @@ function InteractiveGraphIllustration() {
 
 function LargeRepoIllustration() {
   const [collapsed, setCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
-    const t = setInterval(() => setCollapsed((c) => !c), 2200);
+    if (!isHovered) return;
+    setCollapsed((c) => !c);
+    const t = setInterval(() => setCollapsed((c) => !c), 1400);
     return () => clearInterval(t);
-  }, []);
+  }, [isHovered]);
 
   const folders = [
     { label: "examples/", count: "45 files", color: "#94A3B8" },
     { label: "test/", count: "38 files", color: "#94A3B8" },
-    { label: "lib/", count: "14 files", color: "#6366F1" },
+    { label: "lib/", count: "14 files", color: "#232F72" },
   ];
 
   return (
-    <div className="w-full h-full flex flex-col justify-center gap-2 px-2 py-1">
+    <div className="w-full h-full flex flex-col justify-center gap-2 px-2 py-1" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       {/* Lib always expanded */}
-      <div className="rounded-lg border border-[#6366F1] bg-[#6366F110] px-3 py-2">
+      <div className="rounded-lg border border-[#232F72] bg-[#232F7210] px-3 py-2">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-[#6366F1]">lib/</span>
+          <span className="text-[11px] font-semibold text-[#232F72]">lib/</span>
           <span className="font-mono text-[10px] text-slate-400">14 files · expanded</span>
         </div>
         <div className="mt-1.5 flex gap-1.5 flex-wrap">
           {["express.js", "application.js", "router.js", "request.js"].map((f) => (
             <span
               key={f}
-              className="rounded px-1.5 py-0.5 font-mono text-[9px] text-[#6366F1] bg-[#6366F115]"
+              className="rounded px-1.5 py-0.5 font-mono text-[9px] text-[#232F72] bg-[#232F7215]"
             >
               {f}
             </span>
@@ -201,9 +175,9 @@ function LargeRepoIllustration() {
       <div
         className="rounded-full border px-3 py-1 text-center font-mono text-[10px] transition-all duration-500"
         style={{
-          borderColor: collapsed ? "#6366F1" : "#E2E8F0",
-          color: collapsed ? "#6366F1" : "#94A3B8",
-          background: collapsed ? "#EEF2FF" : "transparent",
+          borderColor: collapsed ? "#232F72" : "#E2E8F0",
+          color: collapsed ? "#232F72" : "#94A3B8",
+          background: collapsed ? "#F1F5F9" : "transparent",
         }}
       >
         {collapsed ? "83 files collapsed · graph focused on lib/" : "Showing all 97 files"}
@@ -214,11 +188,14 @@ function LargeRepoIllustration() {
 
 function HistoryIllustration() {
   const [tick, setTick] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
-    const t = setInterval(() => setTick((t) => (t + 1) % 4), 1600);
+    if (!isHovered) return;
+    setTick((t) => (t + 1) % 4);
+    const t = setInterval(() => setTick((t) => (t + 1) % 4), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [isHovered]);
 
   const scans = [
     { label: "Apr 14", nodes: 42, edges: 88, status: "healthy" },
@@ -227,10 +204,10 @@ function HistoryIllustration() {
     { label: "May 27", nodes: 47, edges: 93, status: "healthy" },
   ];
 
-  const statusColor = { healthy: "#10B981", watch: "#F59E0B", hotspot: "#EF4444" };
+  const statusColor = { healthy: "#10B981", watch: "#F59E0B", hotspot: "#991B1B" };
 
   return (
-    <div className="w-full h-full flex flex-col justify-center px-2 py-1 gap-2">
+    <div className="w-full h-full flex flex-col justify-center px-2 py-1 gap-2" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       {/* Timeline */}
       <div className="relative flex items-center justify-between px-2">
         <div className="absolute left-4 right-4 h-px bg-[#E2E8F0]" />
@@ -382,28 +359,28 @@ export default function Features() {
               <text x="6" y="90" fontSize="8" fill="#CBD5E1" fontWeight="600">core</text>
               <text x="6" y="148" fontSize="8" fill="#CBD5E1" fontWeight="600">leaf</text>
               {/* Entry */}
-              <rect x="118" y="16" width="84" height="28" rx="6" fill="#EDE9FE" stroke="#7C3AED" strokeWidth="1.5" />
-              <text x="160" y="27" textAnchor="middle" fontSize="9" fontWeight="700" fill="#4C1D95">index.js</text>
-              <text x="160" y="38" textAnchor="middle" fontSize="7.5" fill="#6D28D9">entry point</text>
-              {/* Core */}
-              <rect x="38" y="70" width="88" height="28" rx="6" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1" />
-              <text x="82" y="81" textAnchor="middle" fontSize="9" fontWeight="600" fill="#4338CA">lib/express.js</text>
-              <text x="82" y="92" textAnchor="middle" fontSize="7" fill="#6366F1">app factory</text>
-              <rect x="194" y="70" width="88" height="28" rx="6" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1" />
-              <text x="238" y="81" textAnchor="middle" fontSize="9" fontWeight="600" fill="#4338CA">router/index</text>
-              <text x="238" y="92" textAnchor="middle" fontSize="7" fill="#6366F1">router core</text>
-              {/* Edges entry → core */}
-              <line x1="145" y1="44" x2="100" y2="70" stroke="#A78BFA" strokeWidth="1.5" />
-              <line x1="175" y1="44" x2="220" y2="70" stroke="#A78BFA" strokeWidth="1.5" />
-              {/* Leaf */}
-              <rect x="14" y="130" width="72" height="24" rx="5" fill="#ECFDF5" stroke="#059669" strokeWidth="0.75" />
-              <text x="50" y="144" textAnchor="middle" fontSize="8" fill="#065F46">request.js</text>
-              <rect x="94" y="130" width="72" height="24" rx="5" fill="#ECFDF5" stroke="#059669" strokeWidth="0.75" />
-              <text x="130" y="144" textAnchor="middle" fontSize="8" fill="#065F46">response.js</text>
-              <rect x="174" y="130" width="66" height="24" rx="5" fill="#ECFDF5" stroke="#059669" strokeWidth="0.75" />
-              <text x="207" y="144" textAnchor="middle" fontSize="8" fill="#065F46">route.js</text>
+              
+              <rect x="118" y="16" width="84" height="28" rx="6" fill="#F1F5F9" stroke="#8B5CF6" strokeWidth="1.5" />
+              <text x="160" y="34" textAnchor="middle" fontSize="9" fontWeight="600" fill="#8B5CF6">index.ts</text>
+
+              <path d="M 160 44 v 16 M 160 60 h -78 v 10 M 160 60 h 78 v 10" fill="none" stroke="#E2E8F0" strokeWidth="1.5" strokeDasharray="4 2" />
+
+              <rect x="38" y="70" width="88" height="28" rx="6" fill="#F1F5F9" stroke="#232F72" strokeWidth="1" />
+              <text x="82" y="84" textAnchor="middle" fontSize="8" fontWeight="600" fill="#232F72">server.ts</text>
+              <text x="82" y="92" textAnchor="middle" fontSize="7" fill="#232F72">app factory</text>
+              <rect x="194" y="70" width="88" height="28" rx="6" fill="#F1F5F9" stroke="#232F72" strokeWidth="1" />
+              <text x="238" y="84" textAnchor="middle" fontSize="8" fontWeight="600" fill="#232F72">routes.ts</text>
+              <text x="238" y="92" textAnchor="middle" fontSize="7" fill="#232F72">router core</text>
+
+              <path d="M 82 98 v 20 M 82 118 h -32 v 12 M 82 118 h 48 v 12 M 238 98 v 20 M 238 118 h -32 v 12" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3 2" />
+
+              <rect x="14" y="130" width="72" height="24" rx="5" fill="#F1F5F9" stroke="#10B981" strokeWidth="0.75" />
+              <text x="50" y="145" textAnchor="middle" fontSize="7" fill="#10B981">auth.middleware</text>
+              <rect x="94" y="130" width="72" height="24" rx="5" fill="#F1F5F9" stroke="#10B981" strokeWidth="0.75" />
+              <text x="130" y="145" textAnchor="middle" fontSize="7" fill="#10B981">rate.limiter</text>
+              <rect x="174" y="130" width="66" height="24" rx="5" fill="#F1F5F9" stroke="#10B981" strokeWidth="0.75" />
+              <text x="207" y="145" textAnchor="middle" fontSize="7" fill="#10B981">logger.ts</text>
               <rect x="248" y="130" width="58" height="24" rx="5" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="0.5" />
-              <text x="277" y="144" textAnchor="middle" fontSize="8" fill="#94A3B8">depd</text>
               {/* Edges core → leaf */}
               <line x1="70" y1="98" x2="50" y2="130" stroke="#6EE7B7" strokeWidth="1" />
               <line x1="95" y1="98" x2="130" y2="130" stroke="#6EE7B7" strokeWidth="1" />
