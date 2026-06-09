@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, GitBranch, History, Search } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { GitBranch, History, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import BrandMark from "./BrandMark";
 import { AUTH_CHANGED_EVENT, clearAuthSession, getStoredAuthUser, type StoredAuthSession } from "../lib/auth";
 
 const navItems = [
-  { href: "/#analyze", label: "Analyze", icon: Search },
+  { href: "/analyze", label: "Analyze", icon: Search },
   { href: "/how-it-works", label: "How it works", icon: GitBranch },
   { href: "/history", label: "History", icon: History },
 ];

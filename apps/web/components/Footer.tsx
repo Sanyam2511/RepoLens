@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import React from "react";
 import BrandMark from "./BrandMark";
 
 export default function Footer() {
