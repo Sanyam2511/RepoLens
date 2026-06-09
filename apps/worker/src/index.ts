@@ -306,9 +306,14 @@ app.post('/analyze', async (req, res) => {
                 }
             }
         }
-    } catch (error) {
-        console.error('Failed to queue analysis job:', error);
-        res.status(500).json({ error: 'Failed to queue analysis job' });
+    } catch (error: any) {
+        if (error.message === 'Could not clone repository.') {
+            console.error('Failed to clone repository:', normalizedRepoUrl);
+            res.status(400).json({ error: 'Repository not found or is private' });
+        } else {
+            console.error('Failed to queue or process analysis job:', error);
+            res.status(500).json({ error: 'Failed to queue analysis job' });
+        }
     }
 });
 

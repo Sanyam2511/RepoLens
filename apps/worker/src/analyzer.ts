@@ -80,10 +80,7 @@ const toPosix = (p: string): string => {
 // JS/TS extensions used by the regex pass to resolve require('./module') without extension
 const JS_TS_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"];
 
-// ALL_EXTENSIONS_WITH_JS: used in regex pass so require('./routes/auth') finds auth.js
-// This is separate from ALL_EXTENSIONS (which is for non-JS languages only)
-// and is the fix for CommonJS repos where internal requires resolve to .js files
-const JS_TS_EXTENSIONS_WITH_INDEX = [...JS_TS_EXTENSIONS];
+
 
 const buildSnippetFromText = (text: string): string | undefined => {
     const trimmed = text.trim();
@@ -282,7 +279,7 @@ const readDartPackageName = (repoPath: string): string | null => {
 };
 
 const resolveNonRelativeModule = (
-    moduleSpecifier: string, fromFilePath: string, repoPath: string,
+    moduleSpecifier: string, repoPath: string,
     index: ReturnType<typeof buildFileIndex>
 ): string | null => {
     const ns = moduleSpecifier.replace(/^@\//, "").replace(/^~\//, "");
@@ -703,7 +700,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
                 if (spec.startsWith(".")) {
                     target = resolveRelativeSourceFile(project, sf, spec);
                 } else {
-                    const resolved = resolveNonRelativeModule(spec, filePath, repoPath, fileIndex);
+                    const resolved = resolveNonRelativeModule(spec, repoPath, fileIndex);
                     if (resolved) target = project.getSourceFile(resolved) ?? null;
                 }
             }
@@ -735,7 +732,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
                 if (spec.startsWith(".")) {
                     target = resolveRelativeSourceFile(project, sf, spec);
                 } else {
-                    const resolved = resolveNonRelativeModule(spec, filePath, repoPath, fileIndex);
+                    const resolved = resolveNonRelativeModule(spec, repoPath, fileIndex);
                     if (resolved) target = project.getSourceFile(resolved) ?? null;
                 }
 
@@ -811,7 +808,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
                 target = resolvePathCandidates(base, ALL_EXTENSIONS_INCLUDING_JS, fileIndex.fileSet, ["index"]);
             } else {
                 // For non-relative requires like require('express'), check if it's internal first
-                target = resolveNonRelativeModule(spec, filePath, repoPath, fileIndex);
+                target = resolveNonRelativeModule(spec, repoPath, fileIndex);
             }
 
             if (!target || target === toPosix(path.resolve(filePath))) {
