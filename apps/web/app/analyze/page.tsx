@@ -31,12 +31,16 @@ export default function AnalyzePage() {
 
   useEffect(() => {
     const presetRepo = new URLSearchParams(window.location.search).get("repoUrl");
-    if (presetRepo) setRepoUrl(presetRepo);
+    if (presetRepo) {
+      setRepoUrl(presetRepo);
+      handleAnalyze(undefined, presetRepo);
+    }
   }, []);
 
-  const handleAnalyze = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!repoUrl) return;
+  const handleAnalyze = async (e?: React.FormEvent, overrideUrl?: string) => {
+    if (e) e.preventDefault();
+    const targetUrl = overrideUrl || repoUrl;
+    if (!targetUrl) return;
 
     setLoading(true);
     setStatusText("Initializing analysis...");
@@ -46,7 +50,7 @@ export default function AnalyzePage() {
     try {
       const res = await workerFetch("/analyze", {
         method: "POST",
-        body: JSON.stringify({ repoUrl }),
+        body: JSON.stringify({ repoUrl: targetUrl }),
       });
       const data = await res.json();
 
