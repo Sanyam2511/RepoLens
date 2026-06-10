@@ -29,20 +29,27 @@ function AnalyticsBlock() {
 
   useEffect(() => {
     if (!isHovered) return;
+    
+    setVisible(false);
+    setTimeout(() => {
+      setIndex((i) => (i + 1) % QA_PAIRS.length);
+      setVisible(true);
+    }, 350);
+
     const interval = setInterval(() => {
       setVisible(false);
       setTimeout(() => {
         setIndex((i) => (i + 1) % QA_PAIRS.length);
         setVisible(true);
       }, 350);
-    }, 2800);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isHovered]);
 
   const pair = QA_PAIRS[index];
 
   return (
-    <div className="surface-card repo-capability-card p-4 lg:col-start-1 lg:row-start-1 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className="surface-card repo-capability-card p-4 lg:col-start-1 lg:row-start-1 overflow-hidden transition-all duration-300 hover:!border-[#2563EB] hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] cursor-pointer flex flex-col" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Architecture Q&amp;A</h3>
       </div>
@@ -50,36 +57,40 @@ function AnalyticsBlock() {
         Ask about hotspots, modules, or dependencies and get a graph-aware answer.
       </p>
 
-      <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] p-4 min-h-[110px] flex flex-col justify-between">
+      <div className="mt-4 flex-1 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] p-4 flex flex-col justify-center gap-4 min-h-[140px] relative overflow-hidden">
         {/* Question bubble */}
         <div
-          className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] px-4 py-2.5 text-sm font-medium text-[var(--color-text-primary)] shadow-sm w-fit max-w-full"
+          className="rounded-2xl rounded-tr-sm border border-[var(--color-border-strong)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--color-text-primary)] shadow-sm w-fit max-w-[90%] self-end relative z-10"
           style={{
-            transition: "opacity 0.35s ease, transform 0.35s ease",
+            transition: "opacity 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
             opacity: visible ? 1 : 0,
-            transform: visible ? "translateY(0)" : "translateY(-8px)",
+            transform: visible ? "translateY(0) scale(1)" : "translateY(10px) scale(0.95)",
           }}
         >
-          &ldquo;{pair?.q}&rdquo;
+          {pair?.q}
         </div>
 
         {/* Answer */}
         <div
-          className="mt-3 flex items-start gap-2"
+          className="flex items-start gap-3 rounded-2xl rounded-tl-sm border border-[var(--color-border-subtle)] bg-white px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,0.04)] w-[95%] relative z-10"
           style={{
-            transition: "opacity 0.35s ease 0.1s",
+            transition: "opacity 0.4s ease 0.15s, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s",
             opacity: visible ? 1 : 0,
+            transform: visible ? "translateY(0) scale(1)" : "translateY(10px) scale(0.95)",
           }}
         >
-          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
+          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#232F72] to-[#3B82F6] text-white shadow-sm">
+            <Brain className="h-3.5 w-3.5" />
           </span>
-          <span className="font-mono text-xs text-[var(--color-text-secondary)]">{pair?.a}</span>
+          <span className="text-sm font-medium text-[var(--color-text-secondary)] leading-snug">{pair?.a}</span>
         </div>
+        
+        {/* Background decorative pattern */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, black 1px, transparent 0)', backgroundSize: '16px 16px' }} />
       </div>
 
       {/* Dot indicators */}
-      <div className="mt-3 flex gap-1.5 justify-center">
+      <div className="mt-4 flex gap-1.5 justify-center mt-auto">
         {QA_PAIRS.map((_, i) => (
           <span
             key={i}
@@ -105,6 +116,17 @@ function MemoryBlock() {
 
   useEffect(() => {
     if (!isHovered) return;
+    
+    setActiveDoc((d) => {
+      const next = (d + 1) % 12;
+      if (next === 0) {
+        setBrainPulse(true);
+        setTimeout(() => setBrainPulse(false), 600);
+        setStateIdx((s) => (s + 1) % MEMORY_STATES.length);
+      }
+      return next;
+    });
+
     const docInterval = setInterval(() => {
       setActiveDoc((d) => {
         const next = (d + 1) % 12;
@@ -115,12 +137,12 @@ function MemoryBlock() {
         }
         return next;
       });
-    }, 220);
+    }, 150);
     return () => clearInterval(docInterval);
   }, [isHovered]);
 
   return (
-    <div className="repo-memory-card repo-capability-card relative overflow-hidden rounded-xl p-6 text-white lg:col-start-2 lg:row-span-2 lg:row-start-1" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className="repo-memory-card repo-capability-card relative overflow-hidden rounded-xl p-6 text-white lg:col-start-2 lg:row-span-2 lg:row-start-1 transition-all duration-300" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="relative z-10 text-center">
         <h3 className="text-xl font-semibold !text-white">RepoLens Memory</h3>
         <p className="mx-auto mt-2 max-w-sm text-sm !text-white/75">
@@ -206,9 +228,10 @@ function ReviewBlock() {
 
   useEffect(() => {
     if (!isHovered) return;
+    setActiveRoute((r) => (r + 1) % ROUTES.length);
     const interval = setInterval(() => {
       setActiveRoute((r) => (r + 1) % ROUTES.length);
-    }, 1800);
+    }, 1200);
     return () => clearInterval(interval);
   }, [isHovered]);
 
@@ -216,7 +239,7 @@ function ReviewBlock() {
   const colors = RISK_COLORS[route?.risk as keyof typeof RISK_COLORS];
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-start-1 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-start-1 overflow-hidden transition-all duration-300 hover:!border-[#2563EB] hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] cursor-pointer" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-1">
         <h3 className="text-lg font-semibold">Review Routing</h3>
       </div>
@@ -293,7 +316,7 @@ function AuditBlock() {
   useEffect(() => {
     if (!isHovered) return;
     if (done) {
-      const reset = setTimeout(() => { setStep(0); setDone(false); }, 1800);
+      const reset = setTimeout(() => { setStep(0); setDone(false); }, 1200);
       return () => clearTimeout(reset);
     }
     const t = setTimeout(() => {
@@ -302,12 +325,12 @@ function AuditBlock() {
       } else {
         setDone(true);
       }
-    }, 900);
+    }, 450);
     return () => clearTimeout(t);
   }, [step, done, isHovered]);
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-1 lg:row-span-2 lg:row-start-2 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className="surface-card repo-capability-card p-3 lg:col-start-1 lg:row-span-2 lg:row-start-2 overflow-hidden transition-all duration-300 hover:!border-[#2563EB] hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] cursor-pointer" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Change Trail</h3>
       </div>
@@ -382,18 +405,25 @@ function IntegrationsBlock() {
 
   useEffect(() => {
     if (!isHovered) return;
+    
+    setSending(true);
+    setTimeout(() => {
+      setSending(false);
+      setActive((a) => (a + 1) % INTEGRATIONS.length);
+    }, 400);
+
     const interval = setInterval(() => {
       setSending(true);
       setTimeout(() => {
         setSending(false);
         setActive((a) => (a + 1) % INTEGRATIONS.length);
-      }, 600);
-    }, 2000);
+      }, 400);
+    }, 1200);
     return () => clearInterval(interval);
   }, [isHovered]);
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-2 lg:row-start-3 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className="surface-card repo-capability-card p-3 lg:col-start-2 lg:row-start-3 overflow-hidden transition-all duration-300 hover:!border-[#2563EB] hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] cursor-pointer" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Integrations</h3>
       </div>
@@ -455,6 +485,16 @@ function MatchBlock() {
 
   useEffect(() => {
     if (!isHovered) return;
+    
+    setPhase((p) => {
+      if (p >= 3) {
+        setMatched(false);
+        return 0;
+      }
+      if (p === 2) setMatched(true);
+      return p + 1;
+    });
+
     const interval = setInterval(() => {
       setPhase((p) => {
         if (p >= 3) {
@@ -464,12 +504,12 @@ function MatchBlock() {
         if (p === 2) setMatched(true);
         return p + 1;
       });
-    }, 1000);
+    }, 600);
     return () => clearInterval(interval);
   }, [isHovered]);
 
   return (
-    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-span-2 lg:row-start-2 overflow-hidden" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className="surface-card repo-capability-card p-3 lg:col-start-3 lg:row-span-2 lg:row-start-2 overflow-hidden transition-all duration-300 hover:!border-[#2563EB] hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] cursor-pointer" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold">Dependency Match</h3>
       </div>

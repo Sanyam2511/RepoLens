@@ -1,19 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { GitBranch, History, Search } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import BrandMark from "./BrandMark";
 import { AUTH_CHANGED_EVENT, clearAuthSession, getStoredAuthUser, type StoredAuthSession } from "../lib/auth";
 
 const navItems = [
-  { href: "/analyze", label: "Analyze", icon: Search },
-  { href: "/how-it-works", label: "How it works", icon: GitBranch },
-  { href: "/history", label: "History", icon: History },
+  { href: "/analyze", label: "Analyze" },
+  { href: "/how-it-works", label: "How it works" },
+  { href: "/history", label: "History" },
 ];
 
 export default function Header() {
   const [authUser, setAuthUser] = useState<StoredAuthSession["user"] | null>(getStoredAuthUser());
+  const pathname = usePathname();
 
   useEffect(() => {
     const syncAuth = () => setAuthUser(getStoredAuthUser());
@@ -27,55 +28,56 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3">
-      <div className="content-grid px-0">
-        <div className="relative overflow-hidden rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/90 shadow-[0_10px_32px_rgba(15,23,42,0.08)] backdrop-blur">
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[var(--color-accent-subtle)] to-transparent" aria-hidden />
-          <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3">
-            <Link href="/" className="flex min-w-0 items-center gap-2 text-[var(--color-text-primary)]">
-              <BrandMark className="h-8 w-8" />
-              <span className="hidden text-lg font-semibold sm:inline">RepoLens</span>
-            </Link>
+    <header className="sticky top-0 z-40 bg-white border-b border-[var(--color-border-subtle)]">
+      <div className="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-10">
+          <Link href="/" className="flex min-w-0 items-center gap-3 text-[var(--color-text-primary)]">
+            <BrandMark className="h-7 w-7" />
+            <span className="text-[1.15rem] font-bold tracking-tight hidden sm:inline">RepoLens</span>
+          </Link>
 
-            <nav className="hidden justify-center lg:flex">
-              <div className="inline-flex items-center gap-1 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] p-1">
-                {navItems.map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-surface)] hover:text-[var(--color-text-primary)]"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </Link>
-                ))}
+          <nav className="hidden lg:flex items-center h-full gap-8">
+            {navItems.map(({ href, label }) => {
+              const isActive = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`relative flex items-center h-16 px-1 text-[15px] font-medium transition-colors hover:text-[#232F72] ${
+                    isActive ? "text-[#232F72]" : "text-[var(--color-text-secondary)]"
+                  }`}
+                >
+                  {label}
+                  {isActive && (
+                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#232F72]" />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {authUser ? (
+            <>
+              <div className="hidden sm:flex flex-col items-end leading-none mr-2 justify-center">
+                <span className="text-sm font-semibold text-[var(--color-text-primary)] mb-[2px]">{authUser.name}</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--color-text-tertiary)]">Signed in</span>
               </div>
-            </nav>
-
-            <div className="flex items-center justify-end gap-3">
-
-              {authUser ? (
-                <>
-                  <div className="hidden sm:flex flex-col items-end leading-tight">
-                    <span className="micro-label">Signed in</span>
-                    <span className="ui-label font-semibold text-[var(--color-text-primary)]">{authUser.name}</span>
-                  </div>
-                  <button type="button" onClick={clearAuthSession} className="btn-secondary text-xs uppercase tracking-[0.12em] px-4 py-2">
-                    Sign out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link href="/login" className="hidden text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] sm:inline-flex">
-                    Login
-                  </Link>
-                  <Link href="/signup" className="btn-primary text-xs uppercase tracking-[0.12em] px-4 py-2">
-                    Get started
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
+              <button type="button" onClick={clearAuthSession} className="px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] rounded-lg hover:bg-slate-50 transition shadow-sm">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="px-4 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[#232F72] transition">
+                Login
+              </Link>
+              <Link href="/signup" className="px-5 py-2.5 text-sm font-semibold text-white bg-[#232F72] hover:bg-[#1C255A] rounded-lg transition shadow-md">
+                Get started
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
