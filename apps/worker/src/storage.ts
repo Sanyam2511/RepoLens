@@ -162,3 +162,25 @@ export const getAnalysisHistoryById = async (id: string, userId?: string | null)
     return readLocalHistory().find((item) => item.id === id && (!userId || item.userId === userId)) ?? null;
   }
 };
+
+export const deleteAnalysisHistoryById = async (id: string, userId?: string | null): Promise<boolean> => {
+  // Try deleting from local storage first if it exists there
+  let deletedLocally = false;
+  const records = readLocalHistory();
+  const index = records.findIndex((item) => item.id === id);
+  if (index >= 0) {
+    records.splice(index, 1);
+    writeLocalHistory(records);
+    deletedLocally = true;
+  }
+
+  // Also try to delete from global prisma db
+  try {
+    await prisma.repoAnalysis.delete({
+      where: { id },
+    });
+    return true;
+  } catch (err) {
+    return deletedLocally;
+  }
+};
