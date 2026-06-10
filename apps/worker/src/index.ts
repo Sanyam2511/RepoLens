@@ -5,7 +5,12 @@ import { analyzeRepo } from './analyzer.js';
 import { downloadRepo, getRepoCommitSha } from './downloader.js';
 import { analysisQueue } from './queue.js';
 import { createUser, getUserFromToken, loginUser, revokeToken } from './authStore.js';
-import { getAnalysisHistoryById, listAnalysisHistory, saveAnalysis } from './storage.js';
+import {
+    deleteAnalysisHistoryById,
+    getAnalysisHistoryById,
+    listAnalysisHistory,
+    saveAnalysis
+} from './storage.js';
 
 const allowedOrigins = new Set([
     'http://localhost:3000',
@@ -53,7 +58,7 @@ app.use((req, res, next) => {
             res.setHeader('Access-Control-Allow-Origin', origin);
             res.setHeader('Vary', 'Origin');
         }
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         res.setHeader('Access-Control-Max-Age', '86400');
     }
@@ -375,6 +380,29 @@ app.get('/history/:id', async (req, res) => {
     } catch (error) {
         console.error('Failed to fetch analysis history item:', error);
         res.status(500).json({ error: 'Failed to fetch analysis history item' });
+    }
+});
+
+app.delete('/history/:id', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+
+        if (!user) {
+            res.status(401).json({ error: 'Not authenticated' });
+            return;
+        }
+
+        const success = await deleteAnalysisHistoryById(req.params.id, user.id);
+
+        if (!success) {
+            res.status(404).json({ error: 'Analysis not found or could not be deleted' });
+            return;
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Failed to delete analysis history item:', error);
+        res.status(500).json({ error: 'Failed to delete analysis history item' });
     }
 });
 
