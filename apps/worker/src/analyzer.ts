@@ -3,9 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { RepoGraph, RepoNode, RepoEdge } from "shared";
 
-const MAX_SNIPPET_LINES = 60;
-const MAX_SNIPPET_CHARS = 4000;
-const MAX_SNIPPET_BYTES = 12000;
+const MAX_SNIPPET_LINES = 2000;
+const MAX_SNIPPET_CHARS = 100000;
+const MAX_SNIPPET_BYTES = 200000;
 const MAX_PARSE_BYTES = 200000;
 
 export type AnalysisProgress = {
