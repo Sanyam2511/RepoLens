@@ -1,84 +1,279 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowRight, GitBranch, Layers3, Search, ShieldCheck, Waypoints } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Search, ShieldCheck, Waypoints, Terminal, Layers3, GitBranch, Github } from "lucide-react";
 import Header from "../../components/Header";
 import Footer from "../../components/Footer";
+
+function PasteRepoAnimation() {
+  const [typedText, setTypedText] = useState("");
+  const targetText = "https://github.com/facebook/react";
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (phase === 0) {
+      if (typedText.length < targetText.length) {
+        timeout = setTimeout(() => {
+          setTypedText(targetText.slice(0, typedText.length + 1));
+        }, 40);
+      } else {
+        timeout = setTimeout(() => setPhase(1), 600);
+      }
+    } else if (phase === 1) {
+      timeout = setTimeout(() => setPhase(2), 1500);
+    } else if (phase === 2) {
+      timeout = setTimeout(() => {
+        setTypedText("");
+        setPhase(0);
+      }, 2000);
+    }
+    return () => clearTimeout(timeout);
+  }, [typedText, phase]);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-[var(--color-bg-base)] dot-grid-bg p-6 sm:p-10 min-h-[340px]">
+      <div className="w-full max-w-md rounded-xl border border-[var(--color-border-strong)] bg-white shadow-xl overflow-hidden relative z-10">
+        <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] px-4 py-3">
+          <div className="flex gap-1.5">
+            <div className="h-3 w-3 rounded-full bg-slate-300" />
+            <div className="h-3 w-3 rounded-full bg-slate-300" />
+            <div className="h-3 w-3 rounded-full bg-slate-300" />
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="text-[10px] font-bold text-[var(--color-text-tertiary)] mb-3 uppercase tracking-widest">Target Repository</div>
+          <div className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all duration-300 ${phase >= 1 ? 'border-[#232F72] ring-2 ring-[#232F72]/10 bg-[#F8FAFC]' : 'border-[var(--color-border-strong)] bg-white'}`}>
+            <Search className={`h-4 w-4 transition-colors ${phase >= 1 ? 'text-[#232F72]' : 'text-[var(--color-text-tertiary)]'}`} />
+            <span className="font-mono text-sm text-[var(--color-text-primary)] min-h-[20px] flex items-center">
+              {typedText}
+              <span className={`w-1.5 h-4 ml-0.5 bg-[#232F72] animate-pulse ${phase >= 1 ? 'hidden' : 'block'}`} />
+            </span>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3">
+            <div className={`h-2 w-full rounded-full bg-[var(--color-bg-subtle)] overflow-hidden transition-all duration-700 ${phase >= 1 ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+              <div className="h-full bg-gradient-to-r from-[#232F72] to-[#3B82F6] transition-all duration-[1500ms] ease-out" style={{ width: phase >= 1 ? '100%' : '0%' }} />
+            </div>
+            <div className={`text-xs text-center font-semibold transition-opacity duration-300 ${phase >= 1 ? 'opacity-100' : 'opacity-0'} ${phase === 2 ? 'text-emerald-600' : 'text-[var(--color-text-secondary)]'}`}>
+              {phase === 2 ? 'Analysis complete ✓' : 'Scanning repository structure...'}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-tr from-white/40 to-transparent pointer-events-none" />
+    </div>
+  );
+}
+
+function GraphAnimation() {
+  const [activeNodes, setActiveNodes] = useState<number[]>([0]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveNodes(prev => {
+        // Sequentially light up nodes
+        const last = prev[prev.length - 1];
+        const next = (last + 1) % 5;
+        const newArr = [...prev, next];
+        if (newArr.length > 3) newArr.shift();
+        return newArr;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const nodes = [
+    { id: 0, x: 25, y: 25, color: '#232F72', label: 'Gateway' },
+    { id: 1, x: 75, y: 15, color: '#10B981', label: 'AuthSvc' },
+    { id: 2, x: 20, y: 75, color: '#3B82F6', label: 'UserDB' },
+    { id: 3, x: 80, y: 80, color: '#F59E0B', label: 'Payment' },
+    { id: 4, x: 50, y: 50, color: '#8B5CF6', label: 'Core' },
+  ];
+
+  return (
+    <div className="relative w-full h-full bg-[var(--color-bg-base)] dot-grid-bg p-6 flex items-center justify-center min-h-[340px]">
+      <div className="relative w-full max-w-[300px] aspect-square">
+        {/* Edges */}
+        <svg className="absolute inset-0 w-full h-full overflow-visible" style={{ pointerEvents: 'none' }}>
+          <path d="M 75 75 L 150 150" stroke={activeNodes.includes(0) && activeNodes.includes(4) ? "#8B5CF6" : "#E2E8F0"} strokeWidth={activeNodes.includes(0) && activeNodes.includes(4) ? "2.5" : "1.5"} strokeDasharray={activeNodes.includes(0) && activeNodes.includes(4) ? "none" : "4"} className="transition-all duration-500" />
+          <path d="M 225 45 L 150 150" stroke={activeNodes.includes(1) && activeNodes.includes(4) ? "#10B981" : "#E2E8F0"} strokeWidth={activeNodes.includes(1) && activeNodes.includes(4) ? "2.5" : "1.5"} strokeDasharray={activeNodes.includes(1) && activeNodes.includes(4) ? "none" : "4"} className="transition-all duration-500" />
+          <path d="M 60 225 L 150 150" stroke={activeNodes.includes(2) && activeNodes.includes(4) ? "#3B82F6" : "#E2E8F0"} strokeWidth={activeNodes.includes(2) && activeNodes.includes(4) ? "2.5" : "1.5"} strokeDasharray={activeNodes.includes(2) && activeNodes.includes(4) ? "none" : "4"} className="transition-all duration-500" />
+          <path d="M 240 240 L 150 150" stroke={activeNodes.includes(3) && activeNodes.includes(4) ? "#F59E0B" : "#E2E8F0"} strokeWidth={activeNodes.includes(3) && activeNodes.includes(4) ? "2.5" : "1.5"} strokeDasharray={activeNodes.includes(3) && activeNodes.includes(4) ? "none" : "4"} className="transition-all duration-500" />
+          <path d="M 75 75 L 225 45" stroke={activeNodes.includes(0) && activeNodes.includes(1) ? "#232F72" : "#E2E8F0"} strokeWidth={activeNodes.includes(0) && activeNodes.includes(1) ? "2.5" : "1.5"} strokeDasharray={activeNodes.includes(0) && activeNodes.includes(1) ? "none" : "4"} className="transition-all duration-500" />
+        </svg>
+
+        {/* Nodes */}
+        {nodes.map((node) => {
+          const isActive = activeNodes.includes(node.id);
+          return (
+            <div
+              key={node.id}
+              className={`absolute flex flex-col items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-10 ${isActive ? 'scale-110' : 'scale-100'}`}
+              style={{ left: `${node.x}%`, top: `${node.y}%`, transform: 'translate(-50%, -50%)' }}
+            >
+              <div
+                className={`h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex items-center justify-center text-white shadow-lg transition-all duration-500`}
+                style={{
+                  background: node.color,
+                  boxShadow: isActive ? `0 0 0 6px ${node.color}20, 0 10px 25px -5px ${node.color}60` : `0 4px 6px -1px rgba(0, 0, 0, 0.1)`,
+                }}
+              >
+                <Waypoints className="h-5 w-5 sm:h-6 sm:w-6 opacity-90" />
+              </div>
+              <div className={`mt-2 font-mono text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-white border border-[var(--color-border-subtle)] transition-all duration-300 ${isActive ? 'text-[var(--color-text-primary)] border-[var(--color-border-strong)]' : 'text-[var(--color-text-tertiary)] opacity-70'}`}>
+                {node.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HistoryAnimation() {
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOffset(prev => (prev + 1) % 4);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const scans = [
+    { repo: "facebook/react", status: "Success", time: "2m ago" },
+    { repo: "vercel/next.js", status: "Success", time: "1h ago" },
+    { repo: "tailwindlabs/tailwindcss", status: "Warning", time: "3h ago" },
+    { repo: "twbs/bootstrap", status: "Success", time: "1d ago" },
+    { repo: "facebook/react", status: "Success", time: "2m ago" }, // Duplicated for smooth infinite scroll effect visually if needed, though we just loop
+  ];
+
+  return (
+    <div className="relative w-full h-full bg-[var(--color-bg-base)] dot-grid-bg p-6 flex items-center justify-center overflow-hidden min-h-[340px]">
+      <div className="w-full max-w-sm flex flex-col gap-3 transition-transform duration-700 ease-in-out relative z-10" style={{ transform: `translateY(${-offset * 72}px)` }}>
+        {scans.map((scan, i) => {
+          const isFocus = i === offset;
+          const isWarning = scan.status === "Warning";
+          return (
+            <div key={i} className={`flex items-center justify-between p-4 rounded-xl border bg-white shadow-sm transition-all duration-700 h-[60px] shrink-0 ${isFocus ? 'border-[#232F72] ring-2 ring-[#232F72]/20 shadow-md scale-[1.02] z-10 opacity-100' : 'border-[var(--color-border-subtle)] scale-100 opacity-70 blur-[0.5px]'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${isFocus ? 'bg-[#232F72] text-white' : 'bg-[var(--color-bg-subtle)] text-[var(--color-text-tertiary)]'}`}>
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className={`font-mono text-xs sm:text-sm font-semibold transition-colors ${isFocus ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>{scan.repo}</div>
+                  <div className="text-[10px] text-[var(--color-text-tertiary)]">{scan.time}</div>
+                </div>
+              </div>
+              <div className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${isWarning ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                {scan.status}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-[var(--color-bg-base)] to-transparent pointer-events-none z-20" />
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[var(--color-bg-base)] to-transparent pointer-events-none z-20" />
+    </div>
+  );
+}
+
+function TerminalSection() {
+  const [lines, setLines] = useState<number>(0);
+  const maxLines = 4;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLines(l => (l + 1) % (maxLines + 2));
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="surface-card overflow-hidden shadow-xl border-[#232F72]/20">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Terminal className="h-4 w-4 text-slate-400" />
+          <span className="text-xs font-mono font-medium text-slate-400">repolens-worker</span>
+        </div>
+        <div className="flex gap-1.5">
+          <div className="h-2.5 w-2.5 rounded-full bg-slate-700" />
+          <div className="h-2.5 w-2.5 rounded-full bg-slate-700" />
+          <div className="h-2.5 w-2.5 rounded-full bg-slate-700" />
+        </div>
+      </div>
+      <div className="bg-[#0A0F1C] p-6 font-mono text-[13px] leading-relaxed text-slate-300 min-h-[260px]">
+        <div className="text-indigo-400 flex gap-2">
+          <span>$</span>
+          <span>analyze --target=https://github.com/facebook/react</span>
+        </div>
+
+        {lines > 0 && (
+          <div className="mt-3 flex gap-2">
+            <span className="text-emerald-400 shrink-0">[OK]</span>
+            <span className="text-slate-300">Cloning repository...</span>
+          </div>
+        )}
+
+        {lines > 1 && (
+          <div className="mt-1 flex gap-2">
+            <span className="text-emerald-400 shrink-0">[OK]</span>
+            <span className="text-slate-300">Parsing AST and resolving imports...</span>
+          </div>
+        )}
+
+        {lines > 2 && (
+          <div className="mt-1 flex gap-2">
+            <span className="text-amber-400 shrink-0">[WARN]</span>
+            <span className="text-amber-200/80">Circular dependency detected in reconciliation/</span>
+          </div>
+        )}
+
+        {lines > 3 && (
+          <div className="mt-1 flex gap-2">
+            <span className="text-emerald-400 shrink-0">[OK]</span>
+            <span className="text-slate-300">Building layout graph with 1,240 nodes...</span>
+          </div>
+        )}
+
+        {lines > 4 && (
+          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-1 text-slate-400">
+            <div><span className="text-indigo-400">Result:</span> Scan complete. Data persisted to storage.</div>
+            <div><span className="text-indigo-400">Time:</span> 4.2s</div>
+            <div className="mt-2 text-emerald-400 font-bold">READY.</div>
+          </div>
+        )}
+
+        {lines <= 4 && (
+          <div className="mt-1 text-slate-500 animate-pulse">_</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const steps = [
   {
     id: "01",
     title: "Paste a repository",
-    description:
-      "Drop in any public GitHub URL. RepoLens collects the project structure, parses the codebase, and prepares the scan for analysis.",
-    icon: Search,
-    illustration: (
-      <svg viewBox="0 0 360 260" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="step1Title step1Desc">
-        <title id="step1Title">Repository URL input</title>
-        <desc id="step1Desc">URL field with file tree nodes below</desc>
-        <rect width="360" height="260" fill="#F8FAFC" />
-        <rect x="34" y="38" width="292" height="44" rx="8" fill="#F1F5F9" stroke="#CBD5E1" />
-        <circle cx="66" cy="60" r="8" fill="#6366F1" />
-        <rect x="92" y="52" width="120" height="16" rx="4" fill="#E2E8F0" />
-        <rect x="40" y="110" width="92" height="94" rx="8" fill="rgba(99,102,241,0.08)" stroke="#6366F1" strokeWidth="1.5" />
-        <rect x="146" y="110" width="92" height="94" rx="8" fill="rgba(124,58,237,0.08)" stroke="#7C3AED" strokeWidth="1.5" />
-        <rect x="252" y="110" width="68" height="94" rx="8" fill="rgba(8,145,178,0.08)" stroke="#0891B2" strokeWidth="1.5" />
-        <path d="M86 126L84 172" stroke="#CBD5E1" strokeWidth="2" />
-        <path d="M192 126L192 172" stroke="#CBD5E1" strokeWidth="2" />
-        <circle cx="86" cy="128" r="5" fill="#6366F1" />
-        <circle cx="192" cy="128" r="5" fill="#7C3AED" />
-        <circle cx="286" cy="128" r="5" fill="#0891B2" />
-      </svg>
-    ),
+    description: "Drop in any public GitHub URL. RepoLens clones the project, parses the codebase AST, and maps the internal structure automatically. No configuration needed.",
+    illustration: <PasteRepoAnimation />
   },
   {
     id: "02",
     title: "Inspect the architecture",
-    description:
-      "The analyzer groups files, APIs, and storage into a graph. Use filters, zoom controls, and node previews to understand the system quickly.",
-    icon: Waypoints,
-    illustration: (
-      <svg viewBox="0 0 360 260" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="step2Title step2Desc">
-        <title id="step2Title">Architecture graph</title>
-        <desc id="step2Desc">Connected nodes with dependency edges</desc>
-        <rect width="360" height="260" fill="#F8FAFC" />
-        <rect x="22" y="24" width="130" height="98" rx="8" fill="rgba(99,102,241,0.08)" stroke="#6366F1" strokeWidth="1.5" />
-        <rect x="208" y="24" width="130" height="72" rx="8" fill="rgba(124,58,237,0.08)" stroke="#7C3AED" strokeWidth="1.5" />
-        <rect x="122" y="136" width="138" height="86" rx="8" fill="rgba(8,145,178,0.08)" stroke="#0891B2" strokeWidth="1.5" />
-        <path d="M88 122L152 154" stroke="#CBD5E1" strokeWidth="2" />
-        <path d="M244 96L192 146" stroke="#CBD5E1" strokeWidth="2" />
-        <circle cx="86" cy="122" r="6" fill="#6366F1" />
-        <circle cx="244" cy="96" r="6" fill="#7C3AED" />
-        <circle cx="192" cy="154" r="6" fill="#0891B2" />
-      </svg>
-    ),
+    description: "The analyzer groups files, APIs, and storage into an interactive dependency graph. Use smart filters and node previews to understand system complexity instantly.",
+    illustration: <GraphAnimation />
   },
   {
     id: "03",
     title: "Save and share results",
-    description:
-      "Every scan is saved to history so you can revisit it later, compare runs, and share the findings with your team.",
-    icon: ShieldCheck,
-    illustration: (
-      <svg viewBox="0 0 360 260" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="step3Title step3Desc">
-        <title id="step3Title">Scan history</title>
-        <desc id="step3Desc">Timeline of saved repository scans</desc>
-        <rect width="360" height="260" fill="#F8FAFC" />
-        <rect x="36" y="34" width="288" height="180" rx="8" fill="#FFFFFF" stroke="#E2E8F0" />
-        <rect x="60" y="60" width="88" height="116" rx="8" fill="rgba(99,102,241,0.08)" stroke="#6366F1" strokeWidth="1.5" />
-        <rect x="164" y="60" width="124" height="36" rx="8" fill="#ECFDF5" stroke="#10B981" strokeWidth="1" />
-        <rect x="164" y="108" width="124" height="36" rx="8" fill="#EEF2FF" stroke="#6366F1" strokeWidth="1" />
-        <circle cx="104" cy="118" r="10" fill="#6366F1" />
-        <path d="M181 78H268" stroke="#10B981" strokeWidth="2" />
-        <path d="M181 126H268" stroke="#6366F1" strokeWidth="2" />
-      </svg>
-    ),
+    description: "Every scan is permanently saved to your history. Revisit previous scans, compare architecture changes over time, and share findings seamlessly with your team.",
+    illustration: <HistoryAnimation />
   },
-] as const;
-
-const highlights = [
-  "Fast graph generation",
-  "Readable filters and previews",
-  "Persistent scan history",
-  "Built for team handoff",
 ];
 
 export default function HowItWorksPage() {
@@ -86,90 +281,85 @@ export default function HowItWorksPage() {
     <main className="page-shell">
       <Header />
 
-      <section className="content-grid section-pad">
-        <div className="surface-card px-6 py-8 sm:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="mt-5 hero-heading leading-tight">
-                A simple path from repository URL
-                <br />
-                <span className="text-[var(--color-text-tertiary)]">to clear architecture insight.</span>
-              </h1>
-              <p className="mt-4 max-w-2xl text-[var(--color-text-secondary)]">
-                RepoLens turns a GitHub repository into a visual map, then keeps every scan in a searchable history so
-                you can return to it later.
-              </p>
-            </div>
+      <section className="relative content-grid pt-20 pb-8 sm:pt-28 sm:pb-10 overflow-hidden">
+        <div className="relative z-10 max-w-4xl mx-auto flex flex-col items-center text-center">
 
-            <div className="flex flex-wrap gap-3 lg:justify-end">
-              <Link href="/#analyze" className="btn-primary text-xs uppercase tracking-[0.12em]">
-                Start analysis <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link href="/history" className="btn-secondary text-xs uppercase tracking-[0.12em]">
-                View history
-              </Link>
-            </div>
-          </div>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-[#1F2937] tracking-tight leading-[1.2] max-w-3xl">
+            From repository to graph <br />
+            <span className="text-[#232F72]">instantly.</span><br />
+            No configuration. No setup.
+          </h1>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {highlights.map((item) => (
-              <div key={item} className="metric-card text-sm text-[var(--color-text-secondary)]">
-                {item}
-              </div>
-            ))}
+          <p className="mt-6 text-lg sm:text-xl text-[var(--color-text-secondary)] leading-relaxed max-w-2xl">
+            RepoLens automatically clones repositories, parses abstract syntax trees, and renders clear, interactive dependency graphs for your team. Audit-ready and fully structured.
+          </p>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <Link href="/#analyze" className="inline-flex items-center justify-center px-7 py-3 rounded-lg bg-[#111827] !text-white text-sm font-semibold hover:bg-[#1F2937] transition-colors shadow-sm">
+              Start Analysis
+            </Link>
+            <Link href="/history" className="inline-flex items-center justify-center px-7 py-3 rounded-lg bg-white border border-[var(--color-border-strong)] text-[var(--color-text-primary)] text-sm font-semibold hover:bg-[var(--color-bg-subtle)] transition-colors shadow-sm">
+              View History
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="content-grid pb-16">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {steps.map((step) => {
-            const Icon = step.icon;
+      {/* Core Steps - Zig Zag Layout */}
+      <section className="content-grid pb-16 overflow-hidden">
+        <div className="flex flex-col gap-12 sm:gap-16">
+          {steps.map((step, index) => {
+            const isEven = index % 2 === 1;
             return (
-              <article key={step.id} className="surface-card overflow-hidden">
-                <div className="border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-subtle)] p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="badge-chip border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]">
-                      {step.id}
-                    </div>
-                    <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] p-2 text-[var(--color-text-secondary)]">
-                      <Icon className="h-4 w-4" />
-                    </div>
+              <div key={step.id} className={`grid gap-10 lg:gap-16 lg:grid-cols-2 items-center`}>
+                <div className={`flex flex-col relative ${isEven ? 'lg:order-last lg:pl-10' : 'lg:pr-10'}`}>
+                  {/* Decorative background number */}
+                  <div className="absolute -top-16 -left-8 text-[120px] font-bold text-slate-100 pointer-events-none -z-10 select-none">
+                    {step.id}
                   </div>
-                  <div className="mt-5 h-[230px] rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] dot-grid-bg p-3">
-                    {step.illustration}
+
+                  <div className="badge-chip w-fit border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] mb-4">
+                    Step {step.id}
                   </div>
+                  <h2 className="text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">{step.title}</h2>
+                  <p className="mt-4 text-base sm:text-lg leading-relaxed text-[var(--color-text-secondary)]">
+                    {step.description}
+                  </p>
                 </div>
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">{step.title}</h2>
-                  <p className="mt-3 text-sm leading-7 text-[var(--color-text-secondary)]">{step.description}</p>
+
+                <div className={`h-[340px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] shadow-sm overflow-hidden ${isEven ? 'lg:order-first' : ''}`}>
+                  {step.illustration}
                 </div>
-              </article>
+              </div>
             );
           })}
         </div>
       </section>
 
-      <section className="content-grid pb-16">
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] items-center">
-          <div className="surface-card p-8">
-            <div className="micro-label">What happens behind the scenes</div>
-            <h2 className="mt-4 section-heading">The workflow is deliberately short.</h2>
-            <div className="mt-6 space-y-4">
+      {/* Terminal Section */}
+      <section className="content-grid py-12 sm:py-16 bg-[var(--color-bg-subtle)] border-t border-[var(--color-border-subtle)]">
+        <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] items-center">
+          <div>
+            <div className="micro-label">Behind the scenes</div>
+            <h2 className="mt-4 text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">Heavy lifting, handled.</h2>
+            <p className="mt-4 text-[var(--color-text-secondary)] text-lg leading-relaxed mb-8">
+              The entire process from cloning to rendering is orchestrated to be as fast as possible. We analyze the AST, resolve deep imports, and layout the graph automatically.
+            </p>
+
+            <div className="space-y-6">
               {[
-                { title: "Collect", text: "The worker fetches repository files and builds a structure the UI can render quickly.", icon: GitBranch },
-                { title: "Layout", text: "Dagre arranges the graph so the explorer stays readable even on larger repositories.", icon: Layers3 },
-                { title: "Persist", text: "Completed scans are stored in history so you can reopen them from the site navigation.", icon: ShieldCheck },
+                { title: "Parallel Parsing", text: "AST traversal runs rapidly, capturing cross-file dependencies and API boundaries.", icon: Layers3 },
+                { title: "Smart Layouts", text: "Complex cycles and clusters are mapped dynamically so the explorer stays readable.", icon: GitBranch },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.title} className="flex gap-4 metric-card">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]">
+                  <div key={item.title} className="flex gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-white text-[#232F72] shadow-sm">
                       <Icon className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="text-base font-semibold text-[var(--color-text-primary)]">{item.title}</div>
-                      <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{item.text}</p>
+                      <div className="text-base font-bold text-[var(--color-text-primary)]">{item.title}</div>
+                      <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">{item.text}</p>
                     </div>
                   </div>
                 );
@@ -177,64 +367,8 @@ export default function HowItWorksPage() {
             </div>
           </div>
 
-          <div className="grid gap-4">
-            <div className="surface-card p-6">
-              <div className="micro-label">Visual summary</div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="compact-card p-4">
-                  <div className="text-sm font-semibold text-[var(--color-text-primary)]">1. Input</div>
-                  <div className="mt-2 h-28 rounded-lg bg-[var(--color-bg-subtle)] border border-[var(--color-border-subtle)] p-3 dot-grid-bg">
-                    <svg viewBox="0 0 240 112" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="18" y="18" width="204" height="42" rx="8" fill="#F1F5F9" stroke="#CBD5E1" />
-                      <circle cx="48" cy="39" r="6" fill="#6366F1" />
-                      <rect x="68" y="31" width="116" height="16" rx="4" fill="#E2E8F0" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="compact-card p-4">
-                  <div className="text-sm font-semibold text-[var(--color-text-primary)]">2. Analysis</div>
-                  <div className="mt-2 h-28 rounded-lg bg-[var(--color-bg-subtle)] border border-[var(--color-border-subtle)] p-3 dot-grid-bg">
-                    <svg viewBox="0 0 240 112" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="24" y="18" width="80" height="36" rx="8" fill="rgba(99,102,241,0.08)" stroke="#6366F1" strokeWidth="1.5" />
-                      <rect x="138" y="16" width="72" height="42" rx="8" fill="rgba(124,58,237,0.08)" stroke="#7C3AED" strokeWidth="1.5" />
-                      <path d="M84 50L118 66" stroke="#CBD5E1" strokeWidth="2" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 compact-card p-4">
-                <div className="text-sm font-semibold text-[var(--color-text-primary)]">3. History</div>
-                <div className="mt-2 h-28 rounded-lg bg-[var(--color-bg-subtle)] border border-[var(--color-border-subtle)] p-3 dot-grid-bg">
-                  <svg viewBox="0 0 500 112" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="22" y="20" width="138" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0" />
-                    <rect x="180" y="20" width="138" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0" />
-                    <rect x="338" y="20" width="138" height="72" rx="8" fill="#FFFFFF" stroke="#E2E8F0" />
-                    <path d="M160 56H178" stroke="#CBD5E1" strokeWidth="3" />
-                    <path d="M318 56H336" stroke="#CBD5E1" strokeWidth="3" />
-                    <circle cx="58" cy="56" r="8" fill="#6366F1" />
-                    <circle cx="216" cy="56" r="8" fill="#7C3AED" />
-                    <circle cx="374" cy="56" r="8" fill="#10B981" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            <div className="surface-card p-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="micro-label">Next step</div>
-                  <h3 className="mt-2 text-xl font-semibold text-[var(--color-text-primary)]">Try it on a real repository.</h3>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <Link href="/#analyze" className="btn-primary text-xs uppercase tracking-[0.12em]">
-                    Start analysis <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  <Link href="/signup" className="btn-secondary text-xs uppercase tracking-[0.12em]">
-                    Get started
-                  </Link>
-                </div>
-              </div>
-            </div>
+          <div className="lg:pl-8">
+            <TerminalSection />
           </div>
         </div>
       </section>
