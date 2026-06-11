@@ -26,6 +26,8 @@ export type GraphNodeData = {
   isCyclic?: boolean;
   isCritical?: boolean;
   extension?: string;
+  isCollapsed?: boolean;
+  height?: number;
 };
 
 const NODE_ROLE_COLORS: Record<NodeCategory, string> = {
@@ -212,9 +214,9 @@ export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData
       <Handle type="target" position={Position.Top}    className="!h-3 !w-3 !border-2 !border-white" style={{ background: colors.border }} />
       <Handle type="source" position={Position.Bottom} className="!h-3 !w-3 !border-2 !border-white" style={{ background: colors.border }} />
 
-      <div className="flex items-center justify-between px-3.5 pt-3 pb-1">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="micro-label shrink-0" style={{ color: colors.border }}>
+      <div className="flex items-center justify-between px-3 pt-2 pb-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[11px] uppercase font-bold tracking-wider shrink-0" style={{ color: colors.border }}>
             {data.kind === "npm-package"
               ? "NPM"
               : data.extension
@@ -222,42 +224,34 @@ export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData
               : data.kind}
           </span>
           {data.isCyclic && (
-            <div className="badge-chip badge-cycle flex items-center gap-1 shrink-0" title="Circular Dependency Detected">
+            <div className="text-rose-500 flex items-center gap-1 shrink-0" title="Circular Dependency Detected">
               <AlertTriangle className="h-3 w-3" />
             </div>
           )}
         </div>
         {(data.inbound ?? 0) > 6 && (
-          <div className="badge-chip badge-hotspot shrink-0">Hotspot</div>
+          <div className="badge-chip badge-hotspot !text-[9px] shrink-0">Hotspot</div>
         )}
       </div>
 
-      <div className="px-3.5 pb-2.5 flex flex-col justify-between" style={{ height: "calc(100% - 32px)" }}>
+      <div className="px-3 pb-2 flex flex-col justify-between" style={{ height: "calc(100% - 24px)" }}>
         <div className="min-w-0">
-          {/* Both label and path use truncate — no text can widen the node */}
           <div
-            className="truncate text-[13px] font-semibold text-[var(--color-text-primary)]"
+            className="truncate text-xs font-bold text-[var(--color-text-primary)] tracking-tight"
             title={data.label}
           >
             {data.label}
           </div>
-          <div
-            className="truncate data-mono-dense text-[var(--color-text-tertiary)] mt-0.5"
-            title={data.pathLabel}
-          >
-            {data.pathLabel || "root"}
-          </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-2">
-          <div className="flex flex-col items-center px-2" title="Files that import this">
-            <span className="micro-label">In</span>
-            <span className="data-mono-dense font-semibold text-[var(--color-text-primary)]">{data.inbound ?? 0}</span>
+        <div className="mt-1 flex items-center gap-3">
+          <div className="flex items-center gap-1" title="Files that import this">
+            <span className="text-[9px] font-mono text-[var(--color-text-tertiary)] uppercase tracking-widest">IN</span>
+            <span className="text-[11px] font-mono font-semibold text-[var(--color-text-primary)]">{data.inbound ?? 0}</span>
           </div>
-          <div className="h-6 w-px bg-[var(--color-border-subtle)]" />
-          <div className="flex flex-col items-center px-2" title="Files this imports">
-            <span className="micro-label">Out</span>
-            <span className="data-mono-dense font-semibold text-[var(--color-text-primary)]">{data.outbound ?? 0}</span>
+          <div className="flex items-center gap-1" title="Files this imports">
+            <span className="text-[9px] font-mono text-[var(--color-text-tertiary)] uppercase tracking-widest">OUT</span>
+            <span className="text-[11px] font-mono font-semibold text-[var(--color-text-primary)]">{data.outbound ?? 0}</span>
           </div>
         </div>
       </div>
@@ -265,13 +259,47 @@ export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData
   );
 }
 
-// Shared fixed height — keeps the canvas grid uniform and prevents
-// nodes with extra content from pushing neighbours out of alignment.
-const NODE_FIXED_HEIGHT = 130;
+export function DirectoryGroupNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
+  const isCollapsed = data.isCollapsed;
+  return (
+    <div
+      className={`group relative rounded-[16px] transition-all duration-300 ${selected ? "ring-2 ring-[var(--color-accent)] ring-offset-2" : ""}`}
+      style={{
+        width: data.width,
+        maxWidth: data.width,
+        height: data.height,
+        maxHeight: data.height,
+        overflow: 'hidden',
+        backgroundColor: "rgba(248, 250, 252, 0.6)", // slate-50 with opacity
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: `1px solid ${isCollapsed ? 'rgba(15, 23, 42, 0.15)' : 'rgba(15, 23, 42, 0.06)'}`,
+        boxShadow: "inset 0 1px 0 0 rgba(255, 255, 255, 0.8), 0 10px 30px -10px rgba(0, 0, 0, 0.05)",
+      }}
+    >
+      <div className="absolute top-0 left-0 right-0 h-[40px] flex items-center px-4 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.7)] backdrop-blur-md overflow-hidden">
+        <div className="flex items-center gap-2.5 min-w-0 w-full">
+          <FolderKanban className="w-4 h-4 text-slate-500 shrink-0" />
+          <span className="text-[13px] font-mono font-semibold text-slate-800 truncate block tracking-tight">
+            {data.pathLabel}
+          </span>
+          {isCollapsed && (
+            <span className="ml-2 text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
+              +{data.clusterSize} items
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const NODE_FIXED_HEIGHT = 80;
 
 export const NODE_TYPES = {
-  analysisNode:  AnalysisGraphNode,
-  detailNode:    DetailGraphNode,
-  clusterNode:   AnalysisGraphNode,
-  collapsedDir:  AnalysisGraphNode,
+  analysisNode:  React.memo(AnalysisGraphNode),
+  detailNode:    React.memo(DetailGraphNode),
+  clusterNode:   React.memo(AnalysisGraphNode),
+  collapsedDir:  React.memo(AnalysisGraphNode),
+  directoryNode: React.memo(DirectoryGroupNode),
 } as const as any;

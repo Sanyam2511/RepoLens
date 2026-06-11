@@ -19,23 +19,24 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { RepoGraph } from "shared";
 import { NODE_TYPES, ROLE_COLORS, NodeCategory, type GraphNodeData } from "./GraphNodes";
-import { Copy, AlertTriangle, Search, X } from "lucide-react";
+import { Copy, AlertTriangle, Search, X, Filter, List } from "lucide-react";
+import dagre from "dagre";
 
-const NODE_WIDTH = 260;
-const NODE_HEIGHT = 130;
-const GRID_COLS = 4;
-
-// Horizontal and vertical spacing between nodes in the layered graph
-const X_GAP = 60;   // gap between nodes on the same row
-const Y_GAP = 110;  // gap between depth levels (on top of NODE_HEIGHT)
-const Y_STEP = NODE_HEIGHT + Y_GAP;
-const X_STEP = NODE_WIDTH + X_GAP;
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 80;
 
 const getDisplayName = (nodeId: string) => {
   const parts = nodeId.split("/");
   const filename = parts.pop() || nodeId;
   const relativePath = parts.join("/");
   return { filename, relativePath };
+};
+
+const getDirname = (nodeId: string) => {
+  if (nodeId.length > 80 && !nodeId.startsWith("http")) return "extracted-snippets";
+  const parts = nodeId.split("/");
+  parts.pop();
+  return parts.length > 0 ? parts.join("/") : "root";
 };
 
 const IGNORED_EXTS = new Set([
@@ -81,153 +82,84 @@ const categorizeNodeByDegree = (
 };
 
 // ---------------------------------------------------------------------------
-// Sugiyama-style layered layout (BFS depth + median-heuristic X ordering)
+// Dagre Grouped Layout
 // ---------------------------------------------------------------------------
-//
-// The problem with the old approach: nodes at the same BFS depth were simply
-// spread evenly across X with no regard for which nodes they connect to. This
-// caused long, crossing-heavy edges because a node at depth 2 might be placed
-// far from the depth-1 node it imports from.
-//
-// This implementation does three passes:
-//
-//  Pass 1 – BFS depth assignment (same as before, "deepen but never reduce")
-//  Pass 2 – Within each depth level, sort nodes by the *median X index* of
-//            their parents (top-down) then their children (bottom-up). Two
-//            iterations of this is the classic Sugiyama crossing-minimisation
-//            heuristic and dramatically reduces tangled edges.
-//  Pass 3 – Assign final pixel X by the sorted order within each layer,
-//            centred around x=0 so fitView stays symmetric.
-//
-// The result: nodes that share parents/children cluster together horizontally,
-// making the graph readable even for dense repos.
-
-function computeLayeredLayout(
+function computeGroupedDagreLayout(
   connectedNodes: Array<{ id: string }>,
-  connectedIds: Set<string>,
-  edgesToRender: Array<{ source: string; target: string }>,
-  adjacency: Map<string, string[]>,
-): Map<string, { x: number; y: number }> {
-
-  // ── Pass 1: BFS longest-path depth ──────────────────────────────────────
-
-  const localInDegree = new Map<string, number>();
-  connectedNodes.forEach(n => localInDegree.set(n.id, 0));
-  edgesToRender.forEach(e => {
-    if (connectedIds.has(e.source) && connectedIds.has(e.target))
-      localInDegree.set(e.target, (localInDegree.get(e.target) ?? 0) + 1);
-  });
-
-  const depthMap = new Map<string, number>();
-  const bfsQueue: string[] = [];
-
+  edgesToRender: Array<{ source: string; target: string }>
+) {
+  const dirMap = new Map<string, any[]>();
+  
   connectedNodes.forEach(n => {
-    if ((localInDegree.get(n.id) ?? 0) === 0) {
-      depthMap.set(n.id, 0);
-      bfsQueue.push(n.id);
-    }
+    const dir = getDirname(n.id);
+    if (!dirMap.has(dir)) dirMap.set(dir, []);
+    dirMap.get(dir)!.push(n);
   });
 
-  const depthCap = connectedNodes.length;
-  for (let qi = 0; qi < bfsQueue.length; qi++) {
-    const nodeId = bfsQueue[qi]!;
-    const d = depthMap.get(nodeId) ?? 0;
-    if (d >= depthCap) continue;
-    for (const nb of adjacency.get(nodeId) ?? []) {
-      if (connectedIds.has(nb) && (depthMap.get(nb) ?? -1) < d + 1) {
-        depthMap.set(nb, d + 1);
-        bfsQueue.push(nb);
-      }
-    }
-  }
-  // Anything unreachable from roots (cycle islands) gets depth 0
-  connectedNodes.forEach(n => { if (!depthMap.has(n.id)) depthMap.set(n.id, 0); });
+  const dirSizes = new Map<string, { w: number; h: number; cols: number }>();
+  const dirNodePos = new Map<string, { x: number; y: number }>();
+  const PADDING = 30;
+  const HEADER_HEIGHT = 50;
+  const GAP = 20;
 
-  // ── Pass 2: Median-heuristic crossing minimisation ───────────────────────
-  //
-  // For each depth level, we sort nodes by the median *order index* of their
-  // parents in the layer above (top-down sweep), then by their children in
-  // the layer below (bottom-up sweep). Two sweeps is the standard Sugiyama
-  // heuristic; more sweeps give diminishing returns.
-
-  // Build layer → node list
-  const layers = new Map<number, string[]>();
-  connectedNodes.forEach(n => {
-    const d = depthMap.get(n.id) ?? 0;
-    if (!layers.has(d)) layers.set(d, []);
-    layers.get(d)!.push(n.id);
-  });
-
-  // orderIndex: the current position of a node within its layer
-  const orderIndex = new Map<string, number>();
-  layers.forEach((ids) => ids.forEach((id, i) => orderIndex.set(id, i)));
-
-  // Build reverse adjacency scoped to connected nodes
-  const reverseAdj = new Map<string, string[]>();
-  connectedNodes.forEach(n => reverseAdj.set(n.id, []));
-  edgesToRender.forEach(e => {
-    if (connectedIds.has(e.source) && connectedIds.has(e.target))
-      reverseAdj.get(e.target)?.push(e.source);
-  });
-
-  const medianOf = (indices: number[]): number => {
-    if (indices.length === 0) return 0;
-    const s = [...indices].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 === 0 ? (s[mid - 1]! + s[mid]!) / 2 : s[mid]!;
-  };
-
-  const sortedDepths = Array.from(layers.keys()).sort((a, b) => a - b);
-
-  // Two full passes (top-down then bottom-up)
-  for (let pass = 0; pass < 2; pass++) {
-    // Top-down: sort by median parent index
-    for (const depth of sortedDepths) {
-      if (depth === 0) continue;
-      const layer = layers.get(depth)!;
-      layer.sort((a, b) => {
-        const parentsA = reverseAdj.get(a) ?? [];
-        const parentsB = reverseAdj.get(b) ?? [];
-        const medA = medianOf(parentsA.map(p => orderIndex.get(p) ?? 0));
-        const medB = medianOf(parentsB.map(p => orderIndex.get(p) ?? 0));
-        return medA - medB;
-      });
-      layer.forEach((id, i) => orderIndex.set(id, i));
-    }
-
-    // Bottom-up: sort by median child index
-    for (const depth of [...sortedDepths].reverse()) {
-      const layer = layers.get(depth)!;
-      layer.sort((a, b) => {
-        const childrenA = adjacency.get(a)?.filter(c => connectedIds.has(c)) ?? [];
-        const childrenB = adjacency.get(b)?.filter(c => connectedIds.has(c)) ?? [];
-        const medA = medianOf(childrenA.map(c => orderIndex.get(c) ?? 0));
-        const medB = medianOf(childrenB.map(c => orderIndex.get(c) ?? 0));
-        return medA - medB;
-      });
-      layer.forEach((id, i) => orderIndex.set(id, i));
-    }
-  }
-
-  // ── Pass 3: Assign pixel positions ──────────────────────────────────────
-  //
-  // Centre each layer around x = 0. Nodes within a layer are spaced X_STEP
-  // apart, ordered by the index we just computed.
-
-  const nodePos = new Map<string, { x: number; y: number }>();
-
-  sortedDepths.forEach(depth => {
-    const layer = layers.get(depth)!;
-    const totalWidth = layer.length * X_STEP;
-    layer.forEach((id, i) => {
-      nodePos.set(id, {
-        x: i * X_STEP - totalWidth / 2 + X_STEP / 2,
-        y: depth * Y_STEP + 60,
+  dirMap.forEach((files, dir) => {
+    files.sort((a, b) => a.id.localeCompare(b.id));
+    const count = files.length;
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    
+    const dirW = (cols * NODE_WIDTH) + ((cols - 1) * GAP) + (PADDING * 2);
+    const dirH = (rows * NODE_HEIGHT) + ((rows - 1) * GAP) + PADDING + HEADER_HEIGHT + PADDING;
+    
+    dirSizes.set(dir, { w: dirW, h: dirH, cols });
+    
+    files.forEach((f, idx) => {
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+      dirNodePos.set(f.id, {
+        x: PADDING + (c * (NODE_WIDTH + GAP)),
+        y: HEADER_HEIGHT + PADDING + (r * (NODE_HEIGHT + GAP)),
       });
     });
   });
 
-  return nodePos;
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: 'TB', nodesep: 150, ranksep: 200, align: 'UL', marginx: 50, marginy: 50 });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  dirMap.forEach((_, dir) => {
+    const size = dirSizes.get(dir)!;
+    g.setNode(dir, { width: size.w, height: size.h });
+  });
+
+  const dirEdges = new Set<string>();
+  edgesToRender.forEach(e => {
+    const dirS = getDirname(e.source);
+    const dirT = getDirname(e.target);
+    if (dirS !== dirT) {
+      const edgeKey = `${dirS}->${dirT}`;
+      if (!dirEdges.has(edgeKey)) {
+        dirEdges.add(edgeKey);
+        g.setEdge(dirS, dirT);
+      }
+    }
+  });
+
+  dagre.layout(g);
+
+  const parentPositions = new Map<string, { x: number; y: number; w: number; h: number }>();
+  g.nodes().forEach(dir => {
+    const node = g.node(dir);
+    // dagre returns center coordinates
+    parentPositions.set(dir, { 
+      x: node.x - node.width / 2, 
+      y: node.y - node.height / 2, 
+      w: node.width, 
+      h: node.height 
+    });
+  });
+
+  return { dirNodePos, parentPositions, dirMap };
 }
 
 // ---------------------------------------------------------------------------
@@ -239,8 +171,10 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [criticalPathOnly, setCriticalPathOnly] = useState(false);
+  const [criticalPathOnly, setCriticalPathOnly] = useState(true);
   const [showNpm, setShowNpm] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const processedData = useMemo(() => {
     if (!graphData) return null;
@@ -332,26 +266,46 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     let maxLayoutY = 0;
 
     if (connectedNodes.length > 0) {
-      const nodePos = computeLayeredLayout(
+      const layoutResult = computeGroupedDagreLayout(
         connectedNodes,
-        connectedIds,
-        edgesToRender,
-        processedData.adjacency,
+        edgesToRender
       );
 
-      // Track the lowest Y so isolated nodes are placed below
-      nodePos.forEach(pos => { maxLayoutY = Math.max(maxLayoutY, pos.y); });
+      layoutResult.parentPositions.forEach((pos, dirId) => {
+        const filesCount = layoutResult.dirMap.get(dirId)?.length || 0;
+        positionedNodes.push({
+          id: `dir-${dirId}`,
+          position: { x: pos.x, y: pos.y },
+          type: "directoryNode",
+          zIndex: -1,
+          style: { width: pos.w, height: pos.h },
+          data: {
+            kind: "folder",
+            label: dirId,
+            rawLabel: dirId,
+            pathLabel: dirId,
+            clusterSize: filesCount,
+            width: pos.w,
+            height: pos.h,
+            isCollapsed: false,
+          } as any,
+        });
+        maxLayoutY = Math.max(maxLayoutY, pos.y + pos.h);
+      });
 
       connectedNodes.forEach(n => {
-        const pos = nodePos.get(n.id) ?? { x: 0, y: 0 };
-        const w = (inDegree.get(n.id) ?? 0) > 4 ? 300 : NODE_WIDTH;
+        const dirId = getDirname(n.id);
+        const localPos = layoutResult.dirNodePos.get(n.id) ?? { x: 0, y: 0 };
+        const w = NODE_WIDTH;
         const { filename, relativePath } = getDisplayName(n.id);
         const ext = filename.includes(".") ? filename.split(".").pop() : "";
         positionedNodes.push({
           id: n.id,
           targetPosition: Position.Top,
           sourcePosition: Position.Bottom,
-          position: pos,
+          position: localPos,
+          parentId: `dir-${dirId}`,
+          extent: 'parent',
           type: "detailNode",
           data: {
             label: filename,
@@ -372,16 +326,46 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
     if (isolatedNodes.length > 0) {
       const startY = maxLayoutY > 0 ? maxLayoutY + NODE_HEIGHT + 120 : 40;
+      const isolatedDirId = "isolated";
+      
+      const cols = Math.ceil(Math.sqrt(isolatedNodes.length));
+      const rows = Math.ceil(isolatedNodes.length / cols);
+      const PADDING = 30;
+      const HEADER_HEIGHT = 50;
+      const GAP = 20;
+      const dirW = (cols * NODE_WIDTH) + ((cols - 1) * GAP) + (PADDING * 2);
+      const dirH = (rows * NODE_HEIGHT) + ((rows - 1) * GAP) + PADDING + HEADER_HEIGHT + PADDING;
+
+      positionedNodes.push({
+        id: `dir-${isolatedDirId}`,
+        position: { x: 0, y: startY },
+        type: "directoryNode",
+        zIndex: -1,
+        style: { width: dirW, height: dirH },
+        data: {
+          kind: "folder",
+          label: "isolated",
+          rawLabel: "isolated",
+          pathLabel: "Isolated Files",
+          clusterSize: isolatedNodes.length,
+          width: dirW,
+          height: dirH,
+          isCollapsed: false,
+        } as any,
+      });
+
       isolatedNodes.forEach((n, idx) => {
-        const col = idx % GRID_COLS;
-        const row = Math.floor(idx / GRID_COLS);
+        const c = idx % cols;
+        const r = Math.floor(idx / cols);
         const { filename, relativePath } = getDisplayName(n.id);
         const ext = filename.includes(".") ? filename.split(".").pop() : "";
         positionedNodes.push({
           id: n.id,
           targetPosition: Position.Top,
           sourcePosition: Position.Bottom,
-          position: { x: col * (NODE_WIDTH + 60), y: startY + row * (NODE_HEIGHT + 60) },
+          position: { x: PADDING + (c * (NODE_WIDTH + GAP)), y: HEADER_HEIGHT + PADDING + (r * (NODE_HEIGHT + GAP)) },
+          parentId: `dir-${isolatedDirId}`,
+          extent: 'parent',
           type: "detailNode",
           data: {
             label: filename,
@@ -404,15 +388,21 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       const srcNode = visibleNodes.find(n => n.id === edge.source);
       const color = ROLE_COLORS[(srcNode?.category as NodeCategory) ?? "internal"]?.border ?? "#64748b";
       const isCyclic = cyclicEdges.has(`${edge.source}->${edge.target}`);
+      const dirSource = getDirname(edge.source);
+      const dirTarget = getDirname(edge.target);
+      const isIntraFolder = dirSource === dirTarget;
+
+      const edgeColor = isCyclic ? "#991B1B" : (isIntraFolder ? "rgba(148, 163, 184, 0.4)" : "#CBD5E1");
+
       return {
         id: `e-${edge.source}->${edge.target}`,
         source: edge.source,
         target: edge.target,
         type: "smoothstep",
         animated: isCyclic,
-        zIndex: -1,
-        markerEnd: { type: MarkerType.ArrowClosed, color: isCyclic ? "#991B1B" : color, width: 10, height: 10 },
-        style: { stroke: isCyclic ? "#991B1B" : color, strokeWidth: 1.5, opacity: 0.6 },
+        zIndex: isIntraFolder ? 0 : 1,
+        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 10, height: 10 },
+        style: { stroke: edgeColor, strokeWidth: isCyclic ? 2.5 : 1.5, opacity: 0.8 },
       };
     });
 
@@ -420,7 +410,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     setEdges(layoutedEdges);
 
     if (rfInstance) {
-      setTimeout(() => rfInstance.fitView({ padding: 0.12, duration: 800, minZoom: 0.05, maxZoom: 1 }), 100);
+      setTimeout(() => rfInstance.fitView({ padding: 0.12, duration: 800, minZoom: 0.3, maxZoom: 1 }), 100);
     }
   }, [processedData, criticalPathOnly, rfInstance, setNodes, setEdges]);
 
@@ -430,16 +420,55 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     if (!processedData) return;
     setNodes(nds => nds.map(n => {
       if (!focusedNodeId) return { ...n, style: { ...n.style, opacity: 1 } };
-      const focused = n.id === focusedNodeId;
-      const neighbor = processedData.adjacency.get(focusedNodeId)?.includes(n.id)
-        || processedData.reverseAdjacency.get(focusedNodeId)?.includes(n.id);
-      return { ...n, style: { ...n.style, opacity: focused || neighbor ? 1 : 0.15 } };
+      
+      let isFocusedOrNeighbor = false;
+      if (focusedNodeId.startsWith("dir-")) {
+        const folderName = focusedNodeId.substring(4);
+        const isChild = n.parentId === focusedNodeId || getDirname(n.id) === folderName;
+        if (n.id === focusedNodeId || isChild) {
+          isFocusedOrNeighbor = true;
+        } else {
+          // Check if this node is connected to any child of the folder
+          const connected = processedData.nodes
+            .filter(cn => getDirname(cn.id) === folderName)
+            .some(cn => processedData.adjacency.get(cn.id)?.includes(n.id) || processedData.reverseAdjacency.get(cn.id)?.includes(n.id));
+          if (connected) isFocusedOrNeighbor = true;
+        }
+      } else {
+        const focused = n.id === focusedNodeId;
+        const neighbor = processedData.adjacency.get(focusedNodeId)?.includes(n.id)
+          || processedData.reverseAdjacency.get(focusedNodeId)?.includes(n.id);
+        isFocusedOrNeighbor = focused || !!neighbor;
+      }
+      return { ...n, style: { ...n.style, opacity: isFocusedOrNeighbor ? 1 : 0.15 } };
     }));
+
     setEdges(eds => eds.map(e => {
-      if (!focusedNodeId) return { ...e, style: { ...e.style, opacity: 0.6, strokeWidth: 1.5 }, zIndex: -1 };
-      if (e.source === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#232F72" }, zIndex: 10 };
-      if (e.target === focusedNodeId) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#10B981" }, zIndex: 10 };
-      return { ...e, style: { ...e.style, opacity: 0.05, strokeWidth: 1 }, zIndex: -1 };
+      // isCyclic original styles used red (#991B1B)
+      const isCyclic = e.style?.stroke === "#991B1B";
+      
+      if (!focusedNodeId) {
+        return { ...e, style: { ...e.style, opacity: 0.8, strokeWidth: 1.5 }, animated: isCyclic, zIndex: -1 };
+      }
+      
+      let isOutgoing = false;
+      let isIncoming = false;
+
+      if (focusedNodeId.startsWith("dir-")) {
+        const folderName = focusedNodeId.substring(4);
+        const sourceFolder = getDirname(e.source);
+        const targetFolder = getDirname(e.target);
+        if (sourceFolder === folderName && targetFolder !== folderName) isOutgoing = true;
+        if (targetFolder === folderName && sourceFolder !== folderName) isIncoming = true;
+      } else {
+        isOutgoing = e.source === focusedNodeId;
+        isIncoming = e.target === focusedNodeId;
+      }
+      
+      if (isOutgoing) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#232F72" }, animated: true, zIndex: 10 };
+      if (isIncoming) return { ...e, style: { ...e.style, opacity: 1, strokeWidth: 3, stroke: "#10B981" }, animated: true, zIndex: 10 };
+      
+      return { ...e, style: { ...e.style, opacity: 0.1, strokeWidth: 1 }, animated: false, zIndex: -1 };
     }));
   }, [focusedNodeId, processedData, setNodes, setEdges]);
 
@@ -450,6 +479,36 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     setFocusedNodeId(node.id);
+  };
+
+  const isFolderFocus = focusedNodeId?.startsWith("dir-");
+  const folderName = isFolderFocus ? focusedNodeId!.substring(4) : null;
+
+  const aggregatedDeps = useMemo(() => {
+    if (!processedData || !focusedNodeId) return { inbound: [], outbound: [] };
+    if (!isFolderFocus) {
+      return {
+        inbound: processedData.reverseAdjacency.get(focusedNodeId) || [],
+        outbound: processedData.adjacency.get(focusedNodeId) || [],
+      };
+    }
+    const inSet = new Set<string>();
+    const outSet = new Set<string>();
+    processedData.nodes.forEach(n => {
+      if (getDirname(n.id) === folderName) {
+        processedData.reverseAdjacency.get(n.id)?.forEach(src => {
+          if (getDirname(src) !== folderName) inSet.add(src);
+        });
+        processedData.adjacency.get(n.id)?.forEach(tgt => {
+          if (getDirname(tgt) !== folderName) outSet.add(tgt);
+        });
+      }
+    });
+    return { inbound: Array.from(inSet), outbound: Array.from(outSet) };
+  }, [processedData, focusedNodeId, isFolderFocus, folderName]);
+
+  const handleNodeClickFull = (_: React.MouseEvent, node: Node) => {
+    handleNodeClick(_ as any, node);
     const w = (node.data as GraphNodeData).width as number ?? NODE_WIDTH;
     if (rfInstance) rfInstance.setCenter(node.position.x + w / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 0.9, duration: 600 });
   };
@@ -462,153 +521,188 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
 
   return (
-    <div className="relative w-full h-full bg-[var(--color-bg-base)] overflow-hidden rounded-xl dot-grid-bg">
-      {/* Right panel */}
-      <div className="absolute top-6 right-6 z-10 w-72 flex flex-col gap-4">
-        <form onSubmit={handleSearch} className="bg-[var(--color-bg-surface)]/80 backdrop-blur-xl border border-[var(--color-border-subtle)] rounded-2xl shadow-xl p-2 flex items-center gap-2">
-          <Search className="w-4 h-4 text-[var(--color-text-tertiary)] ml-2" />
+    <div className="flex flex-col w-full h-full overflow-hidden">
+      
+      {/* Top Filter Bar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border-subtle)] bg-white z-10 shrink-0">
+        {/* Left: Search */}
+        <label className="flex items-center gap-2 border border-[var(--color-border-subtle)] rounded-md px-3 py-1.5 w-[260px] focus-within:border-[var(--color-accent)] transition-colors">
+          <Search className="h-4 w-4 text-[var(--color-text-tertiary)]" />
           <input
             type="text"
-            placeholder="Search a file..."
+            placeholder="Search repo..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="flex-1 outline-none data-mono bg-transparent text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)]"
+            className="w-full bg-transparent outline-none border-0 p-0 shadow-none focus:shadow-none text-sm text-[var(--color-text-primary)]"
           />
-        </form>
+        </label>
 
-        <div className="bg-[var(--color-bg-surface)]/80 backdrop-blur-xl border border-[var(--color-border-subtle)] rounded-2xl shadow-xl p-4">
-          <div className="micro-label mb-2">Role Legend</div>
-          <div className="flex flex-wrap gap-x-3 gap-y-2">
-            {Object.entries(ROLE_COLORS).map(([role, colors]) => (
-              <div key={role} className="flex items-center gap-1.5 ui-label text-[var(--color-text-secondary)] capitalize text-xs">
-                <span className="w-2.5 h-2.5 rounded-sm border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
-                {role}
+        {/* Right: Legend and Filter Dropdowns */}
+        <div className="flex items-center gap-1">
+          {/* Legend Dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => { setShowLegend(p => !p); setShowFilterMenu(false); }}
+              className="flex items-center justify-center p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-subtle)] rounded-md transition-colors"
+              title="Legend"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            {showLegend && (
+              <div className="absolute right-0 top-full mt-2 w-64 p-4 bg-white border border-[var(--color-border-subtle)] rounded-xl shadow-xl z-50">
+                <div className="micro-label mb-3">Role Legend</div>
+                <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                  {Object.entries(ROLE_COLORS).map(([role, colors]) => (
+                    <div key={role} className="flex items-center gap-2 text-slate-600 capitalize text-xs font-medium">
+                      <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: colors.bg, borderColor: colors.border }} />
+                      {role}
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
           </div>
 
-          <div className="mt-5 flex gap-2">
-            <button
-              onClick={() => setCriticalPathOnly(p => !p)}
-              className={`flex-1 py-2 text-xs font-medium rounded-xl transition-all ${
-                criticalPathOnly
-                  ? "bg-[var(--color-accent)]/90 text-white shadow-md border border-transparent"
-                  : "bg-[var(--color-bg-subtle)]/50 text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-text-primary)]"
-              }`}
+          {/* Filter Dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => { setShowFilterMenu(p => !p); setShowLegend(false); }}
+              className="flex items-center justify-center p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-subtle)] rounded-md transition-colors"
+              title="Filters"
             >
-              {criticalPathOnly ? "Show All" : "Connected"}
+              <Filter className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setShowNpm(p => !p)}
-              className={`flex-1 py-2 text-xs font-medium rounded-xl transition-all ${
-                showNpm
-                  ? "bg-[var(--color-node-npm)]/90 text-white shadow-md border border-transparent"
-                  : "bg-[var(--color-bg-subtle)]/50 text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-text-primary)]"
-              }`}
-            >
-              {showNpm ? "Hide NPM" : "Show NPM"}
-            </button>
+            {showFilterMenu && (
+              <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-white border border-[var(--color-border-subtle)] rounded-xl shadow-xl z-50 flex flex-col gap-2">
+                <button
+                  onClick={() => setCriticalPathOnly(p => !p)}
+                  className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    criticalPathOnly ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]" : "hover:bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]"
+                  }`}
+                >
+                  {criticalPathOnly ? "✓ Connected Only" : "Show All Nodes"}
+                </button>
+                <button
+                  onClick={() => setShowNpm(p => !p)}
+                  className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    showNpm ? "bg-amber-50 text-amber-700" : "hover:bg-[var(--color-bg-subtle)] text-[var(--color-text-secondary)]"
+                  }`}
+                >
+                  {showNpm ? "✓ Show NPM Dependencies" : "Hide NPM Dependencies"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Right inspect panel (Overlay) */}
+      {/* Main Graph Area */}
+      <div className="relative flex-1 w-full overflow-hidden bg-[var(--color-bg-base)] dot-grid-bg">
       <div
-        className={`absolute top-0 right-0 bottom-0 z-30 w-96 bg-[var(--color-bg-surface)]/95 backdrop-blur-2xl border-l border-[var(--color-border-subtle)] shadow-2xl flex flex-col transition-all duration-300 transform ${
-          focusedNodeId ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
+        className={`absolute bottom-0 left-0 right-0 z-40 h-[400px] bg-[var(--color-bg-surface)]/95 backdrop-blur-2xl border-t border-[var(--color-border-subtle)] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] flex transition-all duration-300 transform ${
+          focusedNodeId ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
         }`}
       >
-        <div className="p-5 border-b border-[var(--color-border-subtle)]/50 flex items-start justify-between">
-          <div className="min-w-0 pr-4">
-            <div className="micro-label mb-1">Inspecting</div>
-            <div className="font-semibold text-[var(--color-text-primary)] truncate">{focusedNodeData?.label}</div>
-            <div className="data-mono-dense text-[var(--color-text-tertiary)] truncate" title={focusedNodeData?.pathLabel}>
-              {focusedNodeData?.pathLabel}
+        {/* Inspect & Relations Column */}
+        <div className="w-[360px] p-6 border-r border-[var(--color-border-subtle)]/50 flex flex-col gap-6 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-start justify-between shrink-0">
+            <div className="min-w-0 pr-4">
+              <div className="micro-label mb-1">Inspecting</div>
+              <div className="font-semibold text-lg text-[var(--color-text-primary)] truncate" title={focusedNodeData?.label}>
+                {focusedNodeData?.label}
+              </div>
+              <div className="data-mono-dense mt-1 text-[var(--color-text-tertiary)] break-all whitespace-normal line-clamp-2" title={focusedNodeData?.pathLabel}>
+                {focusedNodeData?.pathLabel || (focusedNodeId?.startsWith("dir-") && "Directory")}
+              </div>
             </div>
+            <button onClick={() => setFocusedNodeId(null)} className="p-1.5 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-subtle)] rounded-md">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={() => setFocusedNodeId(null)} className="p-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-subtle)] rounded-md">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <button
-            onClick={() => navigator.clipboard.writeText(focusedNodeData?.rawLabel ?? "")}
-            className="w-full flex items-center justify-center gap-2 btn-secondary py-2 text-xs"
-          >
-            <Copy className="w-3 h-3" /> Copy Path
-          </button>
 
           {focusedNodeData?.isCyclic && (
-            <div className="badge-cycle p-3 rounded-lg text-xs flex gap-2">
+            <div className="badge-cycle p-3 rounded-lg text-xs flex gap-2 shrink-0">
               <AlertTriangle className="w-4 h-4 shrink-0" /> Part of a circular dependency loop.
             </div>
           )}
 
-          <div>
-            <div className="flex items-center justify-between micro-label mb-2">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[var(--color-healthy)]" /> Dependents
-              </span>
-              <span className="data-mono-dense">{processedData?.reverseAdjacency.get(focusedNodeId!)?.length ?? 0}</span>
+          {/* Relations Split */}
+          <div className="flex gap-6 flex-1 min-h-0">
+            {/* Dependents */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between micro-label mb-3 shrink-0">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-[var(--color-healthy)]" /> Dependents
+                </span>
+                <span className="data-mono-dense">{aggregatedDeps.inbound.length}</span>
+              </div>
+              <div className="space-y-1 overflow-y-auto pr-2 pb-4">
+                {aggregatedDeps.inbound.map(id => {
+                  const targetNode = nodes.find(n => n.id === id);
+                  return (
+                    <div
+                      key={id}
+                      className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
+                      onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
+                    >
+                      {getDisplayName(id).filename}
+                    </div>
+                  );
+                })}
+                {aggregatedDeps.inbound.length === 0 && (
+                  <div className="ui-label text-[var(--color-text-tertiary)] italic">No inbound imports.</div>
+                )}
+              </div>
             </div>
-            <div className="space-y-1">
-              {processedData?.reverseAdjacency.get(focusedNodeId!)?.map(id => {
-                const targetNode = nodes.find(n => n.id === id);
-                return (
-                  <div
-                    key={id}
-                    className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
-                    onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
-                  >
-                    {getDisplayName(id).filename}
-                  </div>
-                );
-              })}
-              {!processedData?.reverseAdjacency.get(focusedNodeId!)?.length && (
-                <div className="ui-label text-[var(--color-text-tertiary)] italic">No inbound imports.</div>
-              )}
+
+            {/* Dependencies */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between micro-label mb-3 shrink-0">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-[var(--color-accent)]" /> Dependencies
+                </span>
+                <span className="data-mono-dense">{aggregatedDeps.outbound.length}</span>
+              </div>
+              <div className="space-y-1 overflow-y-auto pr-2 pb-4">
+                {aggregatedDeps.outbound.map(id => {
+                  const targetNode = nodes.find(n => n.id === id);
+                  return (
+                    <div
+                      key={id}
+                      className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
+                      onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
+                    >
+                      {getDisplayName(id).filename}
+                    </div>
+                  );
+                })}
+                {aggregatedDeps.outbound.length === 0 && (
+                  <div className="ui-label text-[var(--color-text-tertiary)] italic">No outbound imports.</div>
+                )}
+              </div>
             </div>
           </div>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between micro-label mb-2">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[var(--color-accent)]" /> Dependencies
-              </span>
-              <span className="data-mono-dense">{processedData?.adjacency.get(focusedNodeId!)?.length ?? 0}</span>
-            </div>
-            <div className="space-y-1">
-              {processedData?.adjacency.get(focusedNodeId!)?.map(id => {
-                const targetNode = nodes.find(n => n.id === id);
-                return (
-                  <div
-                    key={id}
-                    className="data-mono-dense text-[var(--color-text-secondary)] bg-[var(--color-bg-subtle)] px-2 py-1.5 rounded truncate cursor-pointer hover:bg-[var(--color-accent-subtle)]"
-                    onClick={e => targetNode && handleNodeClick(e as any, targetNode)}
-                  >
-                    {getDisplayName(id).filename}
-                  </div>
-                );
-              })}
-              {!processedData?.adjacency.get(focusedNodeId!)?.length && (
-                <div className="ui-label text-[var(--color-text-tertiary)] italic">No outbound imports.</div>
-              )}
-            </div>
-          </div>
-
-          {focusedNodeData?.kind === "file" && focusedNodeData.codeSnippet && (
-            <div>
-              <div className="micro-label mb-2">Code Snippet</div>
-              <div className="border border-[var(--color-border-strong)] rounded-lg overflow-hidden bg-[var(--color-bg-subtle)]">
+        {/* Code Snippet Column */}
+        <div className="flex-1 p-6 overflow-hidden flex flex-col bg-white">
+          {focusedNodeData?.kind === "file" && focusedNodeData.codeSnippet ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="border border-[var(--color-border-strong)] rounded-lg overflow-y-auto bg-[var(--color-bg-subtle)] flex-1">
                 <SyntaxHighlighter
                   language="typescript"
                   style={oneLight}
-                  customStyle={{ background: "transparent", margin: 0, fontSize: "11px", padding: "10px", fontFamily: "var(--font-mono)" }}
+                  wrapLongLines={true}
+                  customStyle={{ background: "transparent", margin: 0, fontSize: "12px", padding: "16px", fontFamily: "var(--font-mono)" }}
                 >
                   {focusedNodeData.codeSnippet}
                 </SyntaxHighlighter>
               </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-[var(--color-text-tertiary)] italic text-sm">
+              {focusedNodeId?.startsWith("dir-") ? "Directory nodes do not have code snippets." : "No code snippet available."}
             </div>
           )}
         </div>
@@ -620,20 +714,22 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         nodeTypes={NODE_TYPES}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick as any}
+        onNodeClick={handleNodeClickFull as any}
         onPaneClick={() => setFocusedNodeId(null)}
         onInit={setRfInstance}
         minZoom={0.05}
         maxZoom={2}
         className="bg-transparent"
+        nodesConnectable={false}
+        nodesDraggable={false}
+        elementsSelectable={false}
+        nodesFocusable={false}
+        edgesFocusable={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#E2E8F0" />
         <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]" />
-        <MiniMap
-          maskColor="rgba(248, 250, 252, 0.85)"
-          nodeColor={n => ROLE_COLORS[(n.data as GraphNodeData).category ?? "internal"]?.border ?? "#64748b"}
-        />
       </ReactFlow>
+      </div>
     </div>
   );
 }

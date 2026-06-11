@@ -183,7 +183,7 @@ export default function AnalyzePage() {
           )}
         </div>
 
-        <div className="mt-8 relative overflow-hidden surface-card p-4 h-[720px]">
+        <div className={`mt-8 relative overflow-hidden h-[85vh] ${viewMode === "summary" ? "surface-card p-4" : "surface-card flex flex-col"}`}>
           {viewMode === "summary" ? (
             <AnalyzerSummary graphData={graphData} metric={summaryMetric} onMetricChange={setSummaryMetric} />
           ) : viewMode === "overview" ? (
