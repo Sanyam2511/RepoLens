@@ -9,7 +9,6 @@ import Footer from "../../components/Footer";
 import AnalyzerSummary from "../../components/AnalyzerSummary";
 import ArchitectureOverview from "../../components/ArchitectureOverview";
 import ArchitectureDetail from "../../components/ArchitectureDetail";
-import type { SummaryMetricId } from "../../lib/graph-summary";
 
 type StatusTone = "idle" | "info" | "success" | "error";
 type ViewMode = "overview" | "detail" | "summary";
@@ -20,13 +19,78 @@ const SAMPLE_REPOS = [
   { label: "Axios", url: "https://github.com/axios/axios" },
 ];
 
+const SkeletonGraph = () => {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg-base)] dot-grid-bg overflow-hidden pointer-events-none">
+      <div className="relative w-full h-full max-w-5xl max-h-[800px] animate-pulse opacity-80">
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+          {/* Edges */}
+          <g stroke="var(--color-border-strong)" strokeWidth="2" fill="none" opacity="0.8">
+            <path d="M 500 120 L 500 170 L 250 170 L 250 220" />
+            <path d="M 500 120 L 500 220" />
+            <path d="M 500 120 L 500 170 L 800 170 L 800 220" />
+            
+            <path d="M 250 280 L 250 330 L 120 330 L 120 380" />
+            <path d="M 250 280 L 250 330 L 320 330 L 320 380" />
+            
+            <path d="M 500 280 L 500 330 L 450 330 L 450 380" />
+            <path d="M 500 280 L 500 330 L 600 330 L 600 380" />
+            
+            <path d="M 800 280 L 800 330 L 750 330 L 750 380" />
+            <path d="M 800 280 L 800 330 L 920 330 L 920 380" />
+
+            {/* Cross edges for randomness */}
+            <path d="M 250 280 L 250 330 L 450 330 L 450 380" opacity="0.5" strokeDasharray="4 4" />
+            <path d="M 800 280 L 800 330 L 600 330 L 600 380" opacity="0.5" strokeDasharray="4 4" />
+            <path d="M 500 280 L 500 330 L 320 330 L 320 380" opacity="0.5" strokeDasharray="4 4" />
+          </g>
+
+          {/* Nodes */}
+          <g fill="var(--color-bg-subtle)" stroke="var(--color-border-strong)" strokeWidth="1.5">
+            {/* Top Node */}
+            <rect x="400" y="60" width="200" height="60" rx="8" />
+            
+            {/* Second Row */}
+            <rect x="150" y="220" width="200" height="60" rx="8" />
+            <rect x="420" y="220" width="160" height="60" rx="8" />
+            <rect x="700" y="220" width="200" height="60" rx="8" />
+            
+            {/* Third Row */}
+            <rect x="40" y="380" width="160" height="60" rx="8" />
+            <rect x="220" y="380" width="180" height="60" rx="8" />
+            <rect x="430" y="380" width="140" height="60" rx="8" />
+            <rect x="590" y="380" width="150" height="60" rx="8" />
+            <rect x="760" y="380" width="120" height="60" rx="8" />
+            <rect x="900" y="380" width="80" height="60" rx="8" />
+          </g>
+          
+          {/* Inner blocks inside nodes to make them look like file cards */}
+          <g fill="var(--color-border-strong)" opacity="0.5">
+            <rect x="420" y="85" width="120" height="10" rx="4" />
+            
+            <rect x="170" y="245" width="100" height="10" rx="4" />
+            <rect x="440" y="245" width="80" height="10" rx="4" />
+            <rect x="720" y="245" width="140" height="10" rx="4" />
+            
+            <rect x="60" y="405" width="90" height="10" rx="4" />
+            <rect x="240" y="405" width="120" height="10" rx="4" />
+            <rect x="450" y="405" width="80" height="10" rx="4" />
+            <rect x="610" y="405" width="90" height="10" rx="4" />
+            <rect x="780" y="405" width="70" height="10" rx="4" />
+            <rect x="920" y="405" width="40" height="10" rx="4" />
+          </g>
+        </svg>
+      </div>
+    </div>
+  );
+};
+
 export default function AnalyzePage() {
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [statusTone, setStatusTone] = useState<StatusTone>("idle");
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
-  const [summaryMetric, setSummaryMetric] = useState<SummaryMetricId>("coupling");
   const [graphData, setGraphData] = useState<RepoGraph | null>(null);
 
   useEffect(() => {
@@ -119,29 +183,27 @@ export default function AnalyzePage() {
           </p>
         </div>
 
-        <div className="surface-card p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="surface-card flex flex-col overflow-hidden">
+          <div className="p-6 border-b border-[var(--color-border-subtle)]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="micro-label">RepoLens Analyzer</div>
-              <div className="mt-2 text-xl font-semibold text-[var(--color-text-primary)]">Visualize repo architecture</div>
+              <div className="text-xl font-semibold text-[var(--color-text-primary)]">Visualize repo architecture</div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <div className="flex rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] p-1 micro-label overflow-x-auto">
-                {(["overview", "detail", "summary"] as ViewMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`rounded-md px-4 py-1.5 capitalize transition whitespace-nowrap ${
-                      viewMode === mode
-                        ? "bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border-subtle)]"
-                        : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
+            <div className="flex border border-[var(--color-border-strong)] bg-[var(--color-bg-subtle)] overflow-x-auto rounded-none">
+              {(["overview", "detail", "summary"] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-6 py-2 capitalize font-medium text-sm transition-all whitespace-nowrap ${
+                    viewMode === mode
+                      ? "bg-[var(--color-accent)] text-white"
+                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface)]"
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -160,18 +222,6 @@ export default function AnalyzePage() {
             </button>
           </form>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {SAMPLE_REPOS.map((sample) => (
-              <button
-                key={sample.url}
-                onClick={() => setRepoUrl(sample.url)}
-                className="badge-chip border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                {sample.label}
-              </button>
-            ))}
-          </div>
-
           {statusText && (
             <div
               className={`mt-4 data-mono font-semibold text-sm ${
@@ -181,16 +231,19 @@ export default function AnalyzePage() {
               {statusText}
             </div>
           )}
-        </div>
+          </div>
 
-        <div className={`mt-8 relative overflow-hidden h-[85vh] ${viewMode === "summary" ? "surface-card p-4" : "surface-card flex flex-col"}`}>
-          {viewMode === "summary" ? (
-            <AnalyzerSummary graphData={graphData} metric={summaryMetric} onMetricChange={setSummaryMetric} />
+          <div className={`relative overflow-hidden h-[85vh] ${viewMode === "summary" ? "p-4" : "flex flex-col"}`}>
+          {loading ? (
+            <SkeletonGraph />
+          ) : viewMode === "summary" ? (
+            <AnalyzerSummary graphData={graphData} />
           ) : viewMode === "overview" ? (
             <ArchitectureOverview graphData={graphData} />
           ) : (
             <ArchitectureDetail graphData={graphData} />
           )}
+        </div>
         </div>
       </main>
       
