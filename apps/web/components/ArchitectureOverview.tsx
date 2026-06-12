@@ -119,6 +119,29 @@ const buildArchitectureTree = (graphData: RepoGraph | null, showNpm: boolean) =>
     });
   };
 
+  const packageModuleCounts = new Map<string, Set<string>>();
+
+  // First pass: count modules per package to prevent massive star graphs
+  graphData.nodes.forEach((node) => {
+    if (node.type !== "file") return;
+    const relSegments = splitPath(node.id).slice(repoRootLen);
+    const fileName = relSegments[relSegments.length - 1] ?? node.label;
+    if (!isRelevantNode(relSegments, fileName)) return;
+    if (relSegments.length <= 1 || fileName.includes("docker")) return;
+
+    let packageId = "";
+    let moduleId = "";
+    if (relSegments[0] === "apps" || relSegments[0] === "packages") {
+      packageId = `${relSegments[0]}/${relSegments[1]}`;
+      moduleId = relSegments.length > 3 ? `${packageId}/${relSegments[2]}` : packageId;
+    } else {
+      packageId = relSegments[0];
+      moduleId = relSegments.length > 2 ? `${packageId}/${relSegments[1]}` : packageId;
+    }
+    if (!packageModuleCounts.has(packageId)) packageModuleCounts.set(packageId, new Set());
+    packageModuleCounts.get(packageId)!.add(moduleId);
+  });
+
   graphData.nodes.forEach((node) => {
     if (!showNpm && node.type === "npm-package") return;
 
@@ -149,9 +172,15 @@ const buildArchitectureTree = (graphData: RepoGraph | null, showNpm: boolean) =>
       moduleId = relSegments.length > 2 ? `${packageId}/${relSegments[1]}` : packageId;
     }
 
+    // Collapse flat packages that have too many modules
+    const modCount = packageModuleCounts.get(packageId)?.size || 0;
+    if (modCount > 8) {
+      moduleId = packageId;
+    }
+
     const pkgColorKey = packageId;
 
-    createVisualNode(packageId, packageId, "folder", "workspace package", pkgColorKey);
+    createVisualNode(packageId, packageId, "folder", modCount > 8 ? "flat package" : "workspace package", pkgColorKey);
 
     if (moduleId !== packageId) {
       const modLabel = splitPath(moduleId).pop() + "/";
@@ -172,7 +201,7 @@ const buildArchitectureTree = (graphData: RepoGraph | null, showNpm: boolean) =>
   moduleFileCounts.forEach((count, moduleId) => {
     const vNode = visualNodes.get(moduleId);
     if (vNode) {
-      vNode.data.sublabel = count === 1 ? `module · 1 internal file` : `module · ${count} internal files`;
+      vNode.data.sublabel = count === 1 ? `1 internal file` : `${count} internal files`;
     }
   });
 
@@ -279,11 +308,6 @@ export default function ArchitectureOverview({ graphData }: { graphData: RepoGra
   const tree = useMemo(() => buildArchitectureTree(graphData, showNpm), [graphData, showNpm]);
 
   useEffect(() => {
-    setNodes(tree.nodes);
-    setEdges(tree.edges);
-  }, [tree, setNodes, setEdges]);
-
-  useEffect(() => {
     if (!tree) return;
     
     setNodes(nds => nds.map(n => {
@@ -315,17 +339,34 @@ export default function ArchitectureOverview({ graphData }: { graphData: RepoGra
   }, [rfInstance, tree.nodes]);
 
   const focusedNodeData = useMemo(
-    () => nodes.find(n => n.id === focusedNodeId)?.data as GraphNodeData | undefined,
+    () => nodes.find(n => n.id === focusedNodeId)?.data,
     [nodes, focusedNodeId]
   );
 
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    setFocusedNodeId(node.id);
-    const w = (node.data as GraphNodeData).width as number ?? NODE_WIDTH;
-    if (rfInstance) {
-      rfInstance.setCenter(node.position.x + w / 2, node.position.y + NODE_HEIGHT / 2, { zoom: 0.9, duration: 600 });
-    }
-  }, [rfInstance]);
+  const aggregatedDeps = useMemo(() => {
+    if (!focusedNodeId || !tree) return { inbound: [], outbound: [] };
+    const inbound = tree.reverseAdjacency.get(focusedNodeId) || [];
+    const outbound = tree.adjacency.get(focusedNodeId) || [];
+    return { inbound, outbound };
+  }, [focusedNodeId, tree]);
+
+  const handleNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      setFocusedNodeId(prev => (prev === node.id ? null : node.id));
+    },
+    []
+  );
+
+  useEffect(() => {
+    setNodes(tree.nodes);
+    setEdges(tree.edges);
+    setFocusedNodeId(null);
+  }, [tree, setNodes, setEdges]);
+
+  const getDisplayName = (id: string) => {
+    const node = tree.nodes.find(n => n.id === id);
+    return node?.data.label ?? id;
+  };
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] dot-grid-bg">
