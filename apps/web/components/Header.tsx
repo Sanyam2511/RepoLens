@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import BrandMark from "./BrandMark";
 import { AUTH_CHANGED_EVENT, clearAuthSession, getStoredAuthUser, type StoredAuthSession } from "../lib/auth";
@@ -15,6 +15,7 @@ const navItems = [
 export default function Header() {
   const [authUser, setAuthUser] = useState<StoredAuthSession["user"] | null>(getStoredAuthUser());
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const syncAuth = () => setAuthUser(getStoredAuthUser());
@@ -26,6 +27,11 @@ export default function Header() {
       window.removeEventListener("storage", syncAuth);
     };
   }, []);
+
+  const handleSignOut = () => {
+    clearAuthSession();
+    router.push("/");
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-[var(--color-border-subtle)]">
@@ -64,7 +70,7 @@ export default function Header() {
                 <span className="text-sm font-semibold text-[var(--color-text-primary)] mb-[2px]">{authUser.name}</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--color-text-tertiary)]">Signed in</span>
               </div>
-              <button type="button" onClick={clearAuthSession} className="px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] rounded-lg hover:bg-slate-50 transition shadow-sm">
+              <button type="button" onClick={handleSignOut} className="px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] rounded-lg hover:bg-slate-50 transition shadow-sm">
                 Sign out
               </button>
             </>
@@ -73,7 +79,7 @@ export default function Header() {
               <Link href="/login" className="px-4 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[#232F72] transition">
                 Login
               </Link>
-              <Link href="/signup" className="px-5 py-2.5 text-sm font-semibold text-white bg-[#232F72] hover:bg-[#1C255A] rounded-lg transition shadow-md">
+              <Link href="/signup" className="px-5 py-2.5 text-sm font-semibold !text-white bg-[#232F72] hover:bg-[#1C255A] rounded-lg transition shadow-md">
                 Get started
               </Link>
             </>
