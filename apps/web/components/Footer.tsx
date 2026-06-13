@@ -5,7 +5,7 @@ import BrandMark from "./BrandMark";
 
 export default function Footer() {
   return (
-    <footer className="relative z-10 mt-20 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-base)] dot-grid-bg">
+    <footer className="relative z-10 mt-16 bg-[var(--color-bg-base)] dot-grid-bg">
       <div className="content-grid py-12">
         <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
           <div className="max-w-2xl">

@@ -266,7 +266,7 @@ function HistoryIllustration() {
 
 export default function Features() {
   return (
-    <section className="content-grid pt-4 pb-16 md:pb-20 space-y-14">
+    <section className="content-grid pt-4 space-y-14">
       {/* Header */}
       <div className="text-center">
         <h2 className="mt-5 section-heading">Architecture clarity. Measurable results.</h2>

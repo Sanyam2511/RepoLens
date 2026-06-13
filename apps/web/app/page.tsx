@@ -33,7 +33,7 @@ export default function RepoLensDashboard() {
         <IntelligenceLayer />
 
         {/* CTA Section instead of Analyzer */}
-        <section className="content-grid section-pad">
+        <section className="content-grid mb-4 relative z-20">
           <div className="surface-card relative overflow-hidden rounded-3xl p-8 md:p-12 border-[var(--color-border-strong)]">
             {/* Background embellishments */}
             <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-[var(--color-bg-subtle)] to-[var(--color-bg-surface)] opacity-80" />
@@ -59,7 +59,7 @@ export default function RepoLensDashboard() {
                   <input
                     type="text"
                     placeholder="https://github.com/expressjs/express"
-                    className="input-field w-full py-4 pl-12 pr-4 shadow-sm"
+                    className="input-field w-full py-4 !pl-12 pr-4 shadow-sm"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                   />

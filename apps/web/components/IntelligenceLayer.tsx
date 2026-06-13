@@ -592,7 +592,7 @@ function MatchBlock() {
 // ─── Section ──────────────────────────────────────────────────────────────────
 export default function IntelligenceLayer() {
   return (
-    <section className="content-grid py-16 md:py-20">
+    <section className="content-grid pb-10 md:pb-16 pt-8">
       <div className="text-center">
         <h2 className="mx-auto mt-5 max-w-4xl section-heading text-3xl md:text-4xl">
           One intelligence layer for your repository.

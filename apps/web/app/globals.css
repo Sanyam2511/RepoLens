@@ -396,9 +396,7 @@ h4 {
 
 .repo-memory-card {
   min-height: 0;
-  background:
-    radial-gradient(circle at 50% 62%, rgba(255, 255, 255, 0.22), transparent 18%),
-    linear-gradient(135deg, var(--color-accent) 0%, #4f46e5 55%, #4338ca 100%);
+  background-color: var(--color-accent);
 }
 
 .repo-memory-card:hover .repo-memory-doc {
@@ -611,4 +609,31 @@ h4 {
   .repo-match-center {
     animation: none;
   }
+}
+
+.dropdown-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.dropdown-scrollbar:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+.dropdown-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dropdown-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+}
+
+.dropdown-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
 }
