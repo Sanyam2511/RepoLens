@@ -35,7 +35,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-[var(--color-border-subtle)]">
-      <div className="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between">
+      <div className="max-w-[1200px] mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-10">
           <Link href="/" className="flex min-w-0 items-center gap-3 text-[var(--color-text-primary)]">
             <BrandMark className="h-7 w-7" />
@@ -49,13 +49,13 @@ export default function Header() {
                 <Link
                   key={href}
                   href={href}
-                  className={`relative flex items-center h-16 px-1 text-[15px] font-medium transition-colors hover:text-[#232F72] ${
-                    isActive ? "text-[#232F72]" : "text-[var(--color-text-secondary)]"
+                  className={`relative flex items-center h-14 px-1 text-[15px] transition-colors hover:text-[var(--color-accent)] ${
+                    isActive ? "text-[var(--color-accent)] font-bold" : "text-[var(--color-text-secondary)] font-medium"
                   }`}
                 >
                   {label}
                   {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#232F72]" />
+                    <span className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[var(--color-accent)] rounded-t-sm" />
                   )}
                 </Link>
               );
