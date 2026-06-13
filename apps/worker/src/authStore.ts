@@ -4,8 +4,10 @@ import path from "node:path";
 import { AuthSessionPayload, AuthUser } from "shared";
 
 type StoredUser = AuthUser & {
-  passwordHash: string;
-  passwordSalt: string;
+  passwordHash?: string;
+  passwordSalt?: string;
+  githubId?: string;
+  githubAccessToken?: string;
 };
 
 type StoredSession = {
@@ -142,3 +144,52 @@ export const revokeToken = (token: string | null | undefined) => {
 };
 
 export const exportAuthStorePath = AUTH_STORE_PATH;
+
+export const loginWithGithub = (profile: any, accessToken: string): AuthSessionPayload => {
+  const store = readStore();
+  let user = store.users.find(u => u.githubId === String(profile.id));
+
+  const normalizedEmail = profile.email ? normalizeEmail(profile.email) : undefined;
+
+  if (!user && normalizedEmail) {
+    // Check if user exists by email but hasn't linked github
+    user = store.users.find(u => u.email === normalizedEmail);
+    if (user) {
+      user.githubId = String(profile.id);
+      user.githubAccessToken = accessToken;
+    }
+  }
+
+  if (!user) {
+    // Create new user
+    const now = new Date().toISOString();
+    user = {
+      id: crypto.randomUUID(),
+      name: profile.name || profile.login,
+      email: normalizedEmail || `${profile.login}@users.noreply.github.com`,
+      githubId: String(profile.id),
+      githubAccessToken: accessToken,
+      createdAt: now,
+      updatedAt: now,
+    };
+    store.users.unshift(user);
+  } else {
+    // Update existing user access token
+    user.githubAccessToken = accessToken;
+  }
+
+  const now = new Date().toISOString();
+  const token = crypto.randomBytes(32).toString("hex");
+  store.sessions.unshift({ token, userId: user.id, createdAt: now, updatedAt: now });
+  writeStore(store);
+
+  return { token, user: stripPassword(user) };
+};
+
+export const getStoredUserByAuthToken = (token: string | null | undefined): StoredUser | null => {
+  if (!token) return null;
+  const store = readStore();
+  const session = store.sessions.find((item) => item.token === token);
+  if (!session) return null;
+  return store.users.find((item) => item.id === session.userId) || null;
+};

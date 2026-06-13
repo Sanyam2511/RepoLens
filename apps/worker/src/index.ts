@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { analyzeRepo } from './analyzer.js';
 import { downloadRepo, getRepoCommitSha } from './downloader.js';
 import { analysisQueue } from './queue.js';
-import { createUser, getUserFromToken, loginUser, revokeToken } from './authStore.js';
+import { createUser, getUserFromToken, loginUser, revokeToken, loginWithGithub, getStoredUserByAuthToken } from './authStore.js';
 import {
     deleteAnalysisHistoryById,
     getAnalysisHistoryById,
@@ -263,6 +263,106 @@ app.get('/auth/me', (req, res) => {
 app.post('/auth/logout', (req, res) => {
     revokeToken(getBearerToken(req));
     res.json({ success: true });
+});
+
+app.get('/auth/github', (req, res) => {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    if (!clientId) {
+        res.status(500).json({ error: 'GitHub OAuth is not configured' });
+        return;
+    }
+    const redirectUri = 'http://localhost:4000/auth/github/callback';
+    const githubUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo,read:user,user:email`;
+    res.redirect(githubUrl);
+});
+
+app.get('/auth/github/callback', async (req, res) => {
+    const code = req.query.code as string;
+    if (!code) {
+        res.status(400).send('No code provided');
+        return;
+    }
+
+    try {
+        const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                client_id: process.env.GITHUB_CLIENT_ID,
+                client_secret: process.env.GITHUB_CLIENT_SECRET,
+                code,
+            }),
+        });
+        const tokenData = await tokenRes.json();
+        
+        if (tokenData.error) {
+            throw new Error(tokenData.error_description || tokenData.error);
+        }
+
+        const accessToken = tokenData.access_token;
+        const userRes = await fetch('https://api.github.com/user', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+        const profile = await userRes.json();
+
+        const emailRes = await fetch('https://api.github.com/user/emails', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+        const emails = await emailRes.json();
+        const primaryEmail = emails.find((e: any) => e.primary)?.email || emails[0]?.email;
+        if (primaryEmail) profile.email = primaryEmail;
+
+        const session = loginWithGithub(profile, accessToken);
+        
+        // Redirect back to frontend with the token
+        const frontendUrl = 'http://localhost:3000/auth/callback';
+        const redirectUrl = new URL(frontendUrl);
+        redirectUrl.searchParams.set('token', session.token);
+        redirectUrl.searchParams.set('user', JSON.stringify(session.user));
+        
+        res.redirect(redirectUrl.toString());
+    } catch (error) {
+        console.error('GitHub OAuth error:', error);
+        res.redirect('http://localhost:3000/login?error=github_oauth_failed');
+    }
+});
+
+app.get('/github/repos', async (req, res) => {
+    const rawUser = getStoredUserByAuthToken(getBearerToken(req));
+    if (!rawUser) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+    }
+
+    if (!rawUser.githubAccessToken) {
+        res.status(400).json({ error: 'Not authenticated with GitHub' });
+        return;
+    }
+
+    try {
+        const repoRes = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+            headers: {
+                Authorization: `Bearer ${rawUser.githubAccessToken}`,
+            },
+        });
+
+        if (!repoRes.ok) {
+            throw new Error(`GitHub API error: ${repoRes.statusText}`);
+        }
+
+        const repos = await repoRes.json();
+        res.json({ repos });
+    } catch (error) {
+        console.error('Failed to fetch GitHub repos:', error);
+        res.status(500).json({ error: 'Failed to fetch GitHub repositories' });
+    }
 });
 
 app.post('/analyze', async (req, res) => {
