@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2, LockKeyhole, Mail, Sparkles, User } from "lucide-react";
+import { Loader2, LockKeyhole, Mail, User, Github } from "lucide-react";
 import AuthShell from "../../components/AuthShell";
 import { setAuthSession, workerFetch } from "../../lib/auth";
 
@@ -41,63 +41,75 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="Welcome back to RepoLens"
+      title="Welcome back"
       subtitle="Sign in to continue to your private analysis history and reopen previous repository scans."
-      footer={
-        <div className="space-y-3">
-          <div className="micro-label">Need an account?</div>
-          <p className="text-sm leading-6 text-[var(--color-text-secondary)]">Create one in a minute and keep your past repository analyses in one place.</p>
-          <Link href="/signup" className="btn-primary text-sm">
-            <Sparkles className="h-4 w-4" /> Create account
-          </Link>
-        </div>
-      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label className="mb-2 block ui-label text-[var(--color-text-secondary)]">Email</label>
-          <div className="flex items-center gap-3">
-            <Mail className="h-4 w-4 text-[var(--color-text-tertiary)]" />
+          <label className="mb-2 block text-sm font-semibold text-[var(--color-text-primary)]">Email</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <Mail className="h-5 w-5 text-[var(--color-text-tertiary)]" />
+            </div>
             <input
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
-              className="input-field w-full"
+              className="input-field w-full !pl-11 h-11 bg-white/50 focus:bg-white transition-colors"
               required
             />
           </div>
         </div>
 
         <div>
-          <label className="mb-2 block ui-label text-[var(--color-text-secondary)]">Password</label>
-          <div className="flex items-center gap-3">
-            <LockKeyhole className="h-4 w-4 text-[var(--color-text-tertiary)]" />
+          <label className="mb-2 block text-sm font-semibold text-[var(--color-text-primary)]">Password</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <LockKeyhole className="h-5 w-5 text-[var(--color-text-tertiary)]" />
+            </div>
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
-              className="input-field w-full"
+              className="input-field w-full !pl-11 h-11 bg-white/50 focus:bg-white transition-colors"
               required
             />
           </div>
         </div>
 
         {error ? (
-          <div className="badge-chip badge-cycle px-4 py-3 text-sm normal-case tracking-normal">{error}</div>
+          <div className="p-3 text-sm font-medium text-red-600 bg-red-50 border border-red-100 rounded-xl">{error}</div>
         ) : null}
 
         <button
           type="submit"
           disabled={loading}
-          className="btn-primary w-full"
+          className="btn-primary w-full h-11 shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.23)] hover:-translate-y-0.5 transition-all"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <User className="h-4 w-4" />}
+          {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
           Sign in
         </button>
 
-        <p className="text-center text-sm text-[var(--color-text-secondary)]">
+        <div className="relative py-4">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-[var(--color-border-subtle)]" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase font-bold tracking-wider">
+            <span className="bg-white/80 backdrop-blur-sm px-3 text-[var(--color-text-tertiary)]">Or</span>
+          </div>
+        </div>
+
+        <Link
+          href="http://localhost:4000/auth/github"
+          className="btn-primary flex items-center justify-center gap-3 w-full h-11 shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.23)] hover:-translate-y-0.5 transition-all"
+        >
+          <Github className="h-5 w-5" />
+          Sign in with GitHub
+        </Link>
+
+        <p className="text-center text-sm text-[var(--color-text-secondary)] pt-4">
           New here? <Link href="/signup" className="font-semibold text-[var(--color-accent)] hover:underline">Create account</Link>
         </p>
       </form>
