@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from 'express';
+import { GoogleGenAI } from '@google/genai';
 import fs from 'node:fs';
 import { analyzeRepo } from './analyzer.js';
 import { downloadRepo, getRepoCommitSha } from './downloader.js';
@@ -503,6 +504,77 @@ app.delete('/history/:id', async (req, res) => {
     } catch (error) {
         console.error('Failed to delete analysis history item:', error);
         res.status(500).json({ error: 'Failed to delete analysis history item' });
+    }
+});
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+
+app.post('/api/chat', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+        
+        const { repoUrl, messages } = req.body;
+        if (!repoUrl || !Array.isArray(messages)) {
+            res.status(400).json({ error: 'Missing repoUrl or invalid messages' });
+            return;
+        }
+
+        const historyList = await listAnalysisHistory(100, user?.id);
+        const analysis = historyList.find(a => a.repoUrl.toLowerCase() === repoUrl.toLowerCase());
+        
+        if (!analysis) {
+            res.status(404).json({ error: 'Analysis not found or access denied' });
+            return;
+        }
+
+        const { graphJson } = analysis;
+        
+        const deps = new Map<string, string[]>();
+        graphJson.edges.forEach(e => {
+            if (!deps.has(e.source)) deps.set(e.source, []);
+            deps.get(e.source)!.push(e.target);
+        });
+
+        const conciseMap = graphJson.nodes.map(n => {
+            const prefix = n.type === 'folder' ? 'D:' : 'F:';
+            const targetDeps = deps.get(n.id);
+            const depStr = targetDeps?.length ? ` -> ${targetDeps.join(', ')}` : '';
+            return `${prefix} ${n.id}${depStr}`;
+        }).join('\n');
+
+        const context = `You are RepoLens AI. Repo: ${analysis.repoUrl}
+Architecture Map (D: Directory, F: File, -> indicates dependencies):
+${conciseMap}
+Be concise.`;
+
+        const recentMessages = messages.slice(-6);
+
+        const responseStream = await ai.models.generateContentStream({
+            model: 'gemini-2.5-flash',
+            contents: recentMessages,
+            config: {
+                systemInstruction: context,
+            }
+        });
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        for await (const chunk of responseStream) {
+            if (chunk.text) {
+                res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+            }
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+    } catch (error) {
+        console.error('Chat error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to process chat' });
+        } else {
+            res.end();
+        }
     }
 });
 
