@@ -9,6 +9,7 @@ import Footer from "../../components/Footer";
 import AnalyzerSummary from "../../components/AnalyzerSummary";
 import ArchitectureOverview from "../../components/ArchitectureOverview";
 import ArchitectureDetail from "../../components/ArchitectureDetail";
+import ArchitectureChat from "../../components/ArchitectureChat";
 
 type StatusTone = "idle" | "info" | "success" | "error";
 type ViewMode = "overview" | "detail" | "summary";
@@ -313,6 +314,7 @@ export default function AnalyzePage() {
         </div>
       </main>
       
+      {graphData && repoUrl && <ArchitectureChat repoUrl={repoUrl} />}
       <Footer />
     </div>
   );
