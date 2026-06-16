@@ -7,6 +7,7 @@ import { AnalysisHistoryRecord } from "shared";
 import { AUTH_CHANGED_EVENT, clearAuthSession, getStoredAuthUser, workerFetch } from "../../lib/auth";
 import Header from "../../components/Header";
 import Footer from "../../components/Footer";
+import { useRouter } from "next/navigation";
 
 // For PDF
 import jsPDF from "jspdf";
@@ -45,6 +46,10 @@ export default function HistoryPage() {
   const [exportItem, setExportItem] = useState<AnalysisHistoryRecord | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [selectedToCompare, setSelectedToCompare] = useState<string[]>([]);
+  const router = useRouter();
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -207,12 +212,26 @@ export default function HistoryPage() {
                 className="w-full bg-transparent outline-none border-0 p-0 shadow-none focus:shadow-none text-sm text-[var(--color-text-primary)]"
               />
             </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setIsCompareMode(!isCompareMode);
+                  setSelectedToCompare([]);
+                }}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition ${isCompareMode ? "bg-[var(--color-accent)] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+              >
+                {isCompareMode ? "Cancel Compare" : "Compare Scans"}
+              </button>
+            </div>
           </div>
 
           <div className="overflow-visible min-h-[400px]">
             <div className="min-w-[1000px]">
               <div className="grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_110px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] bg-[#F8FAFC] px-4 py-3 text-xs font-semibold text-[var(--color-text-secondary)]">
-                <div>Repository</div>
+                <div className="flex items-center gap-2">
+                  {isCompareMode && <div className="w-4" />}
+                  Repository
+                </div>
                 <div>Commit</div>
                 <div>Nodes</div>
                 <div>Edges</div>
@@ -250,11 +269,31 @@ export default function HistoryPage() {
                     return (
                       <div
                         key={item.id}
-                        className="grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_110px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3 transition hover:bg-slate-50 relative"
+                        className={`grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_110px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3 transition relative ${isCompareMode && selectedToCompare.includes(item.id) ? "bg-[var(--color-accent-subtle)]" : "hover:bg-slate-50"}`}
                       >
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold text-sm text-[var(--color-text-primary)]">{repoName}</div>
-                          <div className="truncate text-xs text-[var(--color-text-tertiary)] mt-0.5">{item.repoUrl}</div>
+                        <div className="min-w-0 flex items-center gap-3">
+                          {isCompareMode && (
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 cursor-pointer"
+                              checked={selectedToCompare.includes(item.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  if (selectedToCompare.length < 2) {
+                                    setSelectedToCompare([...selectedToCompare, item.id]);
+                                  } else {
+                                    addToast("You can only compare 2 scans at a time.", "error");
+                                  }
+                                } else {
+                                  setSelectedToCompare(selectedToCompare.filter(id => id !== item.id));
+                                }
+                              }}
+                            />
+                          )}
+                          <div>
+                            <div className="truncate font-semibold text-sm text-[var(--color-text-primary)]">{repoName}</div>
+                            <div className="truncate text-xs text-[var(--color-text-tertiary)] mt-0.5">{item.repoUrl}</div>
+                          </div>
                         </div>
 
                         <div className="truncate font-mono text-xs text-[var(--color-text-secondary)]">
@@ -440,6 +479,23 @@ export default function HistoryPage() {
           </div>
         ))}
       </div>
+
+      {isCompareMode && selectedToCompare.length === 2 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-white border border-[var(--color-border-strong)] shadow-2xl rounded-full px-6 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-10">
+          <div className="text-sm font-semibold text-[var(--color-text-primary)]">
+            2 scans selected
+          </div>
+          <button
+            onClick={() => {
+              router.push(`/analyze?compareA=${selectedToCompare[0]}&compareB=${selectedToCompare[1]}`);
+            }}
+            className="btn-primary text-sm px-6 py-2"
+          >
+            Compare Scans
+          </button>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes slideIn {
           from { transform: translateX(100%); opacity: 0; }

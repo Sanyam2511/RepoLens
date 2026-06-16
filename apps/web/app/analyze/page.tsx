@@ -10,6 +10,7 @@ import AnalyzerSummary from "../../components/AnalyzerSummary";
 import ArchitectureOverview from "../../components/ArchitectureOverview";
 import ArchitectureDetail from "../../components/ArchitectureDetail";
 import ArchitectureChat from "../../components/ArchitectureChat";
+import { computeGraphDiff } from "../../lib/diff-logic";
 
 type StatusTone = "idle" | "info" | "success" | "error";
 type ViewMode = "overview" | "detail" | "summary";
@@ -95,10 +96,18 @@ export default function AnalyzePage() {
   const [graphData, setGraphData] = useState<RepoGraph | null>(null);
   const [githubRepos, setGithubRepos] = useState<any[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareLabels, setCompareLabels] = useState<{base: string, target: string} | null>(null);
 
   useEffect(() => {
-    const presetRepo = new URLSearchParams(window.location.search).get("repoUrl");
-    if (presetRepo) {
+    const params = new URLSearchParams(window.location.search);
+    const presetRepo = params.get("repoUrl");
+    const compareA = params.get("compareA");
+    const compareB = params.get("compareB");
+
+    if (compareA && compareB) {
+      handleCompare(compareA, compareB);
+    } else if (presetRepo) {
       setRepoUrl(presetRepo);
       handleAnalyze(undefined, presetRepo);
     }
@@ -118,6 +127,57 @@ export default function AnalyzePage() {
     };
     fetchGithubRepos();
   }, []);
+
+  const handleCompare = async (idA: string, idB: string) => {
+    setLoading(true);
+    setStatusText("Fetching scans for comparison...");
+    setStatusTone("info");
+    setIsCompareMode(true);
+    setGraphData(null);
+
+    try {
+      const [resA, resB] = await Promise.all([
+        workerFetch(`/history/${idA}`),
+        workerFetch(`/history/${idB}`)
+      ]);
+
+      const dataA = await resA.json();
+      const dataB = await resB.json();
+
+      if (dataA.analysis && dataB.analysis) {
+        // Sort by date: older is base, newer is target
+        const dateA = new Date(dataA.analysis.analyzedAt).getTime();
+        const dateB = new Date(dataB.analysis.analyzedAt).getTime();
+        
+        let baseRecord, targetRecord;
+        if (dateA < dateB) {
+          baseRecord = dataA.analysis;
+          targetRecord = dataB.analysis;
+        } else {
+          baseRecord = dataB.analysis;
+          targetRecord = dataA.analysis;
+        }
+
+        const diffGraph = computeGraphDiff(baseRecord.graphJson, targetRecord.graphJson);
+        setGraphData(diffGraph);
+        setRepoUrl(baseRecord.repoUrl);
+        setCompareLabels({
+          base: baseRecord.commitSha.substring(0, 7),
+          target: targetRecord.commitSha.substring(0, 7)
+        });
+        setStatusText("Comparison complete.");
+        setStatusTone("success");
+      } else {
+        setStatusText("Failed to fetch one or both scans.");
+        setStatusTone("error");
+      }
+    } catch (err) {
+      setStatusText("Error computing diff.");
+      setStatusTone("error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAnalyze = async (e?: React.FormEvent, overrideUrl?: string) => {
     if (e) e.preventDefault();
@@ -226,6 +286,28 @@ export default function AnalyzePage() {
           </div>
 
           <div className="relative mt-4 flex items-center gap-2">
+            {isCompareMode ? (
+              <div className="flex-1 flex items-center gap-3 bg-[var(--color-bg-subtle)] px-4 py-2.5 rounded-xl border border-[var(--color-border-subtle)]">
+                <div className="font-semibold text-sm text-[var(--color-text-primary)]">
+                  Compare Mode
+                </div>
+                {compareLabels && (
+                  <div className="text-xs text-[var(--color-text-secondary)] flex items-center gap-2">
+                    <span className="font-mono bg-white border px-1.5 py-0.5 rounded text-rose-600 border-rose-200">{compareLabels.base}</span>
+                    <span>→</span>
+                    <span className="font-mono bg-white border px-1.5 py-0.5 rounded text-emerald-600 border-emerald-200">{compareLabels.target}</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    window.location.href = "/analyze";
+                  }}
+                  className="ml-auto text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
+                >
+                  Exit Compare Mode
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleAnalyze} className="flex-1 flex items-center gap-2">
               <div className="ml-1"><Search className="h-5 w-5 text-[var(--color-text-tertiary)]" /></div>
               <input
@@ -240,8 +322,9 @@ export default function AnalyzePage() {
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Analyze"}
               </button>
             </form>
+            )}
 
-            {githubRepos.length > 0 && (
+            {!isCompareMode && githubRepos.length > 0 && (
               <>
                 <div className="text-[var(--color-text-tertiary)] text-xs font-bold uppercase tracking-wider px-1">OR</div>
                 <div className="relative">
