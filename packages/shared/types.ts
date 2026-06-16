@@ -3,7 +3,8 @@ export interface RepoNode {
     label: string;
     type: 'file' | 'api-endpoint' | 'storage' | 'folder' | 'npm-package';
     codeSnippet?: string;
-    packageRoot?: string; 
+    packageRoot?: string;
+    diffStatus?: 'added' | 'removed' | 'unchanged' | 'modified';
 }
 
 export interface RepoEdge {
@@ -13,6 +14,7 @@ export interface RepoEdge {
     data?: {
         direct?: boolean;
     };
+    diffStatus?: 'added' | 'removed' | 'unchanged';
 }
 
 export interface RepoGraph {

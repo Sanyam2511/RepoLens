@@ -28,6 +28,8 @@ export type GraphNodeData = {
   extension?: string;
   isCollapsed?: boolean;
   height?: number;
+  diffStatus?: 'added' | 'removed' | 'unchanged' | 'modified';
+  onToggle?: (id: string) => void;
 };
 
 const NODE_ROLE_COLORS: Record<NodeCategory, string> = {
@@ -193,7 +195,24 @@ export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData
   // which made that node's entire depth row stretch horizontally.
   // Setting explicit width + maxWidth + overflow:hidden on the wrapper
   // means the node stays the same size as every other node in the graph.
-  const nodeWidth = Math.min(data.width ?? NODE_FIXED_WIDTH, NODE_MAX_WIDTH);
+  let nodeWidth = Math.min(data.width ?? NODE_FIXED_WIDTH, NODE_MAX_WIDTH);
+  
+  let dynamicColors = { ...colors };
+  let borderStyle = "solid";
+  if (data.diffStatus === 'added') {
+    dynamicColors.border = "#10B981"; // green
+    dynamicColors.bg = "rgba(16, 185, 129, 0.1)";
+  } else if (data.diffStatus === 'removed') {
+    dynamicColors.border = "#EF4444"; // red
+    dynamicColors.bg = "rgba(239, 68, 68, 0.1)";
+    borderStyle = "dashed";
+  } else if (data.diffStatus === 'modified') {
+    dynamicColors.border = "#F59E0B"; // amber
+    dynamicColors.bg = "rgba(245, 158, 11, 0.1)";
+  } else if (data.diffStatus === 'unchanged') {
+    dynamicColors.bg = "rgba(248, 250, 252, 0.5)"; // dimmed
+    dynamicColors.border = "rgba(148, 163, 184, 0.5)";
+  }
 
   return (
     <div
@@ -205,18 +224,19 @@ export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData
         // Fixed height keeps the canvas grid uniform; content is truncated
         height: NODE_FIXED_HEIGHT,
         backgroundColor: "var(--color-bg-surface)",
-        border: `1.5px solid ${colors.border}`,
+        border: `1.5px ${borderStyle} ${dynamicColors.border}`,
         boxShadow: "var(--shadow-card)",
+        opacity: data.diffStatus === 'removed' ? 0.7 : 1,
       }}
     >
-      <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: colors.bg }} />
-      <div className="absolute inset-x-0 top-0 h-[3px] rounded-t-lg" style={{ background: colors.border }} />
-      <Handle type="target" position={Position.Top}    className="!h-3 !w-3 !border-2 !border-white" style={{ background: colors.border }} />
-      <Handle type="source" position={Position.Bottom} className="!h-3 !w-3 !border-2 !border-white" style={{ background: colors.border }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: dynamicColors.bg }} />
+      <div className="absolute inset-x-0 top-0 h-[3px] rounded-t-lg" style={{ background: dynamicColors.border }} />
+      <Handle type="target" position={Position.Top}    className="!h-3 !w-3 !border-2 !border-white" style={{ background: dynamicColors.border }} />
+      <Handle type="source" position={Position.Bottom} className="!h-3 !w-3 !border-2 !border-white" style={{ background: dynamicColors.border }} />
 
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[11px] uppercase font-bold tracking-wider shrink-0" style={{ color: colors.border }}>
+          <span className="text-[11px] uppercase font-bold tracking-wider shrink-0" style={{ color: dynamicColors.border }}>
             {data.kind === "npm-package"
               ? "NPM"
               : data.extension
@@ -278,15 +298,28 @@ export function DirectoryGroupNode({ data, selected }: NodeProps<Node<GraphNodeD
       }}
     >
       <div className="absolute top-0 left-0 right-0 h-[40px] flex items-center px-4 border-b border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.7)] backdrop-blur-md overflow-hidden">
-        <div className="flex items-center gap-2.5 min-w-0 w-full">
-          <FolderKanban className="w-4 h-4 text-slate-500 shrink-0" />
-          <span className="text-[13px] font-mono font-semibold text-slate-800 truncate block tracking-tight">
-            {data.pathLabel}
-          </span>
-          {isCollapsed && (
-            <span className="ml-2 text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
-              +{data.clusterSize} items
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <FolderKanban className="w-4 h-4 text-slate-500 shrink-0" />
+            <span className="text-[13px] font-mono font-semibold text-slate-800 truncate block tracking-tight">
+              {data.pathLabel}
             </span>
+            {isCollapsed && (
+              <span className="ml-2 text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
+                +{data.clusterSize} items
+              </span>
+            )}
+          </div>
+          {data.onToggle && (
+            <button 
+              className="text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded px-2 py-0.5 text-[10px] font-semibold transition ml-2 shrink-0 pointer-events-auto"
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onToggle!(data.rawLabel);
+              }}
+            >
+              {isCollapsed ? "Expand" : "Collapse"}
+            </button>
           )}
         </div>
       </div>

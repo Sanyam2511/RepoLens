@@ -86,7 +86,8 @@ const categorizeNodeByDegree = (
 // ---------------------------------------------------------------------------
 function computeGroupedDagreLayout(
   connectedNodes: Array<{ id: string }>,
-  edgesToRender: Array<{ source: string; target: string }>
+  edgesToRender: Array<{ source: string; target: string }>,
+  collapsedDirs: Set<string>
 ) {
   const dirMap = new Map<string, any[]>();
   
@@ -104,23 +105,27 @@ function computeGroupedDagreLayout(
 
   dirMap.forEach((files, dir) => {
     files.sort((a, b) => a.id.localeCompare(b.id));
-    const count = files.length;
-    const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
-    
-    const dirW = (cols * NODE_WIDTH) + ((cols - 1) * GAP) + (PADDING * 2);
-    const dirH = (rows * NODE_HEIGHT) + ((rows - 1) * GAP) + PADDING + HEADER_HEIGHT + PADDING;
-    
-    dirSizes.set(dir, { w: dirW, h: dirH, cols });
-    
-    files.forEach((f, idx) => {
-      const c = idx % cols;
-      const r = Math.floor(idx / cols);
-      dirNodePos.set(f.id, {
-        x: PADDING + (c * (NODE_WIDTH + GAP)),
-        y: HEADER_HEIGHT + PADDING + (r * (NODE_HEIGHT + GAP)),
+    if (collapsedDirs.has(dir)) {
+      dirSizes.set(dir, { w: NODE_WIDTH + 20, h: 60, cols: 0 });
+    } else {
+      const count = files.length;
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      
+      const dirW = (cols * NODE_WIDTH) + ((cols - 1) * GAP) + (PADDING * 2);
+      const dirH = (rows * NODE_HEIGHT) + ((rows - 1) * GAP) + PADDING + HEADER_HEIGHT + PADDING;
+      
+      dirSizes.set(dir, { w: dirW, h: dirH, cols });
+      
+      files.forEach((f, idx) => {
+        const c = idx % cols;
+        const r = Math.floor(idx / cols);
+        dirNodePos.set(f.id, {
+          x: PADDING + (c * (NODE_WIDTH + GAP)),
+          y: HEADER_HEIGHT + PADDING + (r * (NODE_HEIGHT + GAP)),
+        });
       });
-    });
+    }
   });
 
   const g = new dagre.graphlib.Graph();
@@ -175,6 +180,16 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
   const [showNpm, setShowNpm] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
+
+  const handleToggleDir = useCallback((dirId: string) => {
+    setCollapsedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dirId)) next.delete(dirId);
+      else next.add(dirId);
+      return next;
+    });
+  }, []);
 
   const processedData = useMemo(() => {
     if (!graphData) return null;
@@ -268,7 +283,8 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     if (connectedNodes.length > 0) {
       const layoutResult = computeGroupedDagreLayout(
         connectedNodes,
-        edgesToRender
+        edgesToRender,
+        collapsedDirs
       );
 
       layoutResult.parentPositions.forEach((pos, dirId) => {
@@ -287,7 +303,9 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
             clusterSize: filesCount,
             width: pos.w,
             height: pos.h,
-            isCollapsed: false,
+            isCollapsed: collapsedDirs.has(dirId),
+            onToggle: handleToggleDir,
+            diffStatus: layoutResult.dirMap.get(dirId)?.some(f => (f as any).diffStatus === 'added' || (f as any).diffStatus === 'removed' || (f as any).diffStatus === 'modified') ? 'modified' : 'unchanged',
           } as any,
         });
         maxLayoutY = Math.max(maxLayoutY, pos.y + pos.h);
@@ -295,6 +313,8 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
 
       connectedNodes.forEach(n => {
         const dirId = getDirname(n.id);
+        if (collapsedDirs.has(dirId)) return; // Skip rendering children of collapsed dirs
+        
         const localPos = layoutResult.dirNodePos.get(n.id) ?? { x: 0, y: 0 };
         const w = NODE_WIDTH;
         const { filename, relativePath } = getDisplayName(n.id);
@@ -319,6 +339,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
             extension: ext,
             codeSnippet: n.codeSnippet,
             width: w,
+            diffStatus: (n as any).diffStatus,
           },
         });
       });
@@ -350,11 +371,13 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
           clusterSize: isolatedNodes.length,
           width: dirW,
           height: dirH,
-          isCollapsed: false,
+          isCollapsed: collapsedDirs.has(isolatedDirId),
+          onToggle: handleToggleDir,
         } as any,
       });
 
-      isolatedNodes.forEach((n, idx) => {
+      if (!collapsedDirs.has(isolatedDirId)) {
+        isolatedNodes.forEach((n, idx) => {
         const c = idx % cols;
         const r = Math.floor(idx / cols);
         const { filename, relativePath } = getDisplayName(n.id);
@@ -379,32 +402,69 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
             extension: ext,
             codeSnippet: n.codeSnippet,
             width: NODE_WIDTH,
+            diffStatus: (n as any).diffStatus,
           },
         });
       });
+      }
     }
 
-    const layoutedEdges: Edge[] = edgesToRender.map(edge => {
-      const srcNode = visibleNodes.find(n => n.id === edge.source);
-      const color = ROLE_COLORS[(srcNode?.category as NodeCategory) ?? "internal"]?.border ?? "#64748b";
-      const isCyclic = cyclicEdges.has(`${edge.source}->${edge.target}`);
+    const renderedEdgesMap = new Map<string, Edge>();
+
+    edgesToRender.forEach(edge => {
+      let sourceId = edge.source;
+      let targetId = edge.target;
+      
       const dirSource = getDirname(edge.source);
       const dirTarget = getDirname(edge.target);
-      const isIntraFolder = dirSource === dirTarget;
+      
+      // If either end is in a collapsed folder, rewrite edge to the folder node
+      if (collapsedDirs.has(dirSource)) {
+        sourceId = `dir-${dirSource}`;
+      }
+      if (collapsedDirs.has(dirTarget)) {
+        // If it's isolated folder, we named it 'isolated'
+        if (isolatedNodes.some(n => n.id === edge.target)) {
+           if (collapsedDirs.has('isolated')) targetId = `dir-isolated`;
+        } else {
+           targetId = `dir-${dirTarget}`;
+        }
+      }
+      if (isolatedNodes.some(n => n.id === edge.source)) {
+         if (collapsedDirs.has('isolated')) sourceId = `dir-isolated`;
+      }
+      
+      // Prevent self-loops on folders
+      if (sourceId === targetId) return;
 
-      const edgeColor = isCyclic ? "#991B1B" : (isIntraFolder ? "rgba(148, 163, 184, 0.4)" : "#CBD5E1");
+      const edgeKey = `${sourceId}->${targetId}`;
+      
+      if (!renderedEdgesMap.has(edgeKey)) {
+        const srcNode = visibleNodes.find(n => n.id === edge.source);
+        const color = ROLE_COLORS[(srcNode?.category as NodeCategory) ?? "internal"]?.border ?? "#64748b";
+        const isCyclic = cyclicEdges.has(`${edge.source}->${edge.target}`);
+        const isIntraFolder = dirSource === dirTarget;
 
-      return {
-        id: `e-${edge.source}->${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-        type: "smoothstep",
-        animated: isCyclic,
-        zIndex: isIntraFolder ? 0 : 1,
-        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 10, height: 10 },
-        style: { stroke: edgeColor, strokeWidth: isCyclic ? 2.5 : 1.5, opacity: 0.8 },
-      };
+        let edgeColor = isCyclic ? "#991B1B" : (isIntraFolder ? "rgba(148, 163, 184, 0.4)" : "#CBD5E1");
+        
+        let diffStatus = (edge as any).diffStatus;
+        if (diffStatus === 'added') edgeColor = "#10B981";
+        if (diffStatus === 'removed') edgeColor = "#EF4444";
+
+        renderedEdgesMap.set(edgeKey, {
+          id: `e-${edgeKey}`,
+          source: sourceId,
+          target: targetId,
+          type: "smoothstep",
+          animated: isCyclic,
+          zIndex: isIntraFolder ? 0 : 1,
+          markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 10, height: 10 },
+          style: { stroke: edgeColor, strokeWidth: isCyclic ? 2.5 : 1.5, opacity: diffStatus === 'removed' ? 0.3 : 0.8 },
+        });
+      }
     });
+
+    const layoutedEdges = Array.from(renderedEdgesMap.values());
 
     setNodes(positionedNodes);
     setEdges(layoutedEdges);
@@ -412,7 +472,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     if (rfInstance) {
       setTimeout(() => rfInstance.fitView({ padding: 0.12, duration: 800, minZoom: 0.3, maxZoom: 1 }), 100);
     }
-  }, [processedData, criticalPathOnly, rfInstance, setNodes, setEdges]);
+  }, [processedData, criticalPathOnly, rfInstance, setNodes, setEdges, collapsedDirs, handleToggleDir]);
 
   useEffect(() => { mapDataToCanvas(); }, [mapDataToCanvas]);
 
