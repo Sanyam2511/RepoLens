@@ -282,7 +282,14 @@ export function DetailGraphNode({ data, selected }: NodeProps<Node<GraphNodeData
 export function DirectoryGroupNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
   const isCollapsed = data.isCollapsed;
   return (
-    <div
+    <>
+      {isCollapsed && (
+        <>
+          <Handle type="target" position={Position.Top} className="!opacity-0 pointer-events-none" />
+          <Handle type="source" position={Position.Bottom} className="!opacity-0 pointer-events-none" />
+        </>
+      )}
+      <div
       className={`group relative rounded-[16px] transition-all duration-300 ${selected ? "ring-2 ring-[var(--color-accent)] ring-offset-2" : ""}`}
       style={{
         width: data.width,
@@ -324,6 +331,7 @@ export function DirectoryGroupNode({ data, selected }: NodeProps<Node<GraphNodeD
         </div>
       </div>
     </div>
+    </>
   );
 }
 

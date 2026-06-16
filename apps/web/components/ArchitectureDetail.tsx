@@ -410,6 +410,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
     }
 
     const renderedEdgesMap = new Map<string, Edge>();
+    const edgeCounts = new Map<string, number>();
 
     edgesToRender.forEach(edge => {
       let sourceId = edge.source;
@@ -438,6 +439,7 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
       if (sourceId === targetId) return;
 
       const edgeKey = `${sourceId}->${targetId}`;
+      edgeCounts.set(edgeKey, (edgeCounts.get(edgeKey) || 0) + 1);
       
       if (!renderedEdgesMap.has(edgeKey)) {
         const srcNode = visibleNodes.find(n => n.id === edge.source);
@@ -459,9 +461,18 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
           animated: isCyclic,
           zIndex: isIntraFolder ? 0 : 1,
           markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor, width: 10, height: 10 },
-          style: { stroke: edgeColor, strokeWidth: isCyclic ? 2.5 : 1.5, opacity: diffStatus === 'removed' ? 0.3 : 0.8 },
+          style: { stroke: edgeColor, strokeWidth: 1.5, opacity: diffStatus === 'removed' ? 0.3 : 0.8 }, // We will update strokeWidth after counting
         });
       }
+    });
+
+    // Update stroke widths based on edge counts
+    renderedEdgesMap.forEach((edge, key) => {
+       const count = edgeCounts.get(key) || 1;
+       const isCyclic = edge.animated;
+       const baseStrokeWidth = isCyclic ? 2.5 : 1.5;
+       const finalStrokeWidth = count > 1 ? baseStrokeWidth + Math.min(count * 0.4, 5) : baseStrokeWidth;
+       edge.style = { ...edge.style, strokeWidth: finalStrokeWidth };
     });
 
     const layoutedEdges = Array.from(renderedEdgesMap.values());
