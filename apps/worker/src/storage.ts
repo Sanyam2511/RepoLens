@@ -28,16 +28,10 @@ const writeLocalHistory = (records: AnalysisHistoryRecord[]) => {
   fs.writeFileSync(LOCAL_HISTORY_PATH, JSON.stringify(records, null, 2), "utf8");
 };
 
-const upsertLocalHistory = (record: AnalysisHistoryRecord) => {
+const appendLocalHistory = (record: AnalysisHistoryRecord) => {
   const records = readLocalHistory();
-  const index = records.findIndex((item) => item.repoUrl === record.repoUrl && item.userId === record.userId);
-
-  if (index >= 0) {
-    records[index] = record;
-  } else {
-    records.unshift(record);
-  }
-
+  // Instead of updating the existing one for the same repo, we simply prepend it so it acts as an append-only log.
+  records.unshift(record);
   writeLocalHistory(records);
 };
 
@@ -56,13 +50,11 @@ export const saveAnalysis = async (
   };
 
   try {
-    const result = await prisma.repoAnalysis.upsert({
-      where: { repoUrl },
-      create: payload,
-      update: payload,
+    const result = await prisma.repoAnalysis.create({
+      data: payload,
     });
 
-    upsertLocalHistory({
+    appendLocalHistory({
       id: result.id,
       userId,
       repoUrl: result.repoUrl,
@@ -76,21 +68,21 @@ export const saveAnalysis = async (
 
     return result;
   } catch {
-    const existing = readLocalHistory().find((item) => item.repoUrl === repoUrl && item.userId === userId);
     const now = new Date().toISOString();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
     const localRecord: AnalysisHistoryRecord = {
-      id: existing?.id ?? `local-${Buffer.from(repoUrl).toString("base64url")}`,
+      id: `local-${Buffer.from(repoUrl).toString("base64url").substring(0, 20)}-${randomSuffix}`,
       userId,
       repoUrl,
       commitSha: commitSha ?? null,
       nodeCount: graph.nodes.length,
       edgeCount: graph.edges.length,
       graphJson: graph as unknown as RepoGraph,
-      createdAt: existing?.createdAt ?? now,
+      createdAt: now,
       updatedAt: now,
     };
 
-    upsertLocalHistory(localRecord);
+    appendLocalHistory(localRecord);
     return localRecord;
   }
 };

@@ -9,7 +9,7 @@ datasource db {
 
 model RepoAnalysis {
   id        String   @id @default(uuid())
-  repoUrl   String   @unique
+  repoUrl   String
   commitSha String?
   graphJson Json
   nodeCount Int
