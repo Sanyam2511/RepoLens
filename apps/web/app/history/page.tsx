@@ -227,7 +227,7 @@ export default function HistoryPage() {
 
           <div className="overflow-visible min-h-[400px]">
             <div className="min-w-[1000px]">
-              <div className="grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_110px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] bg-[#F8FAFC] px-4 py-3 text-xs font-semibold text-[var(--color-text-secondary)]">
+              <div className="grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] bg-[#F8FAFC] px-4 py-3 text-xs font-semibold text-[var(--color-text-secondary)]">
                 <div className="flex items-center gap-2">
                   {isCompareMode && <div className="w-4" />}
                   Repository
@@ -235,7 +235,6 @@ export default function HistoryPage() {
                 <div>Commit</div>
                 <div>Nodes</div>
                 <div>Edges</div>
-                <div>Status</div>
                 <div>Updated</div>
                 <div className="text-right"></div>
               </div>
@@ -269,7 +268,7 @@ export default function HistoryPage() {
                     return (
                       <div
                         key={item.id}
-                        className={`grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_110px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3 transition relative ${isCompareMode && selectedToCompare.includes(item.id) ? "bg-[var(--color-accent-subtle)]" : "hover:bg-slate-50"}`}
+                        className={`grid grid-cols-[minmax(220px,2fr)_120px_90px_90px_160px_60px] items-center gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3 transition relative ${isCompareMode && selectedToCompare.includes(item.id) ? "bg-[var(--color-accent-subtle)]" : "hover:bg-slate-50"}`}
                       >
                         <div className="min-w-0 flex items-center gap-3">
                           {isCompareMode && (
@@ -303,10 +302,6 @@ export default function HistoryPage() {
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">{item.nodeCount}</div>
 
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">{item.edgeCount}</div>
-
-                        <div className={`text-xs font-semibold px-2 py-1 rounded w-fit ${item.edgeCount > 0 ? "bg-[#ECFDF5] text-[#10B981]" : "bg-[#FFFBEB] text-[#F59E0B]"}`}>
-                          {statusLabel}
-                        </div>
 
                         <div className="text-sm text-[var(--color-text-secondary)]">
                            {new Date(item.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
@@ -487,6 +482,12 @@ export default function HistoryPage() {
           </div>
           <button
             onClick={() => {
+              const scan1 = history.find(h => h.id === selectedToCompare[0]);
+              const scan2 = history.find(h => h.id === selectedToCompare[1]);
+              if (scan1 && scan2 && scan1.repoUrl !== scan2.repoUrl) {
+                addToast("You can only compare scans from the same repository.", "error");
+                return;
+              }
               router.push(`/analyze?compareA=${selectedToCompare[0]}&compareB=${selectedToCompare[1]}`);
             }}
             className="btn-primary text-sm px-6 py-2"
