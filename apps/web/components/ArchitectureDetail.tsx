@@ -182,6 +182,18 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    if (!graphData) return;
+    const dirsToCollapse = new Set<string>();
+    graphData.nodes.forEach(n => {
+      const dir = getDirname(n.id);
+      if (/(test|example|fixture|mock|demo|docs|e2e)/i.test(dir)) {
+        dirsToCollapse.add(dir);
+      }
+    });
+    setCollapsedDirs(dirsToCollapse);
+  }, [graphData]);
+
   const handleToggleDir = useCallback((dirId: string) => {
     setCollapsedDirs(prev => {
       const next = new Set(prev);
