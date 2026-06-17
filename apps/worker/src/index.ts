@@ -578,11 +578,96 @@ Be concise.`;
     }
 });
 
+app.post('/api/integrations/slack', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+        const { repoUrl, webhookUrl } = req.body;
+        if (!repoUrl || !webhookUrl) return res.status(400).json({ error: 'Missing repoUrl or webhookUrl' });
+        
+        const historyList = await listAnalysisHistory(100, user?.id);
+        const analysis = historyList.find(a => a.repoUrl.toLowerCase() === repoUrl.toLowerCase());
+        if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+        
+        const inDegree = new Map<string, number>();
+        analysis.graphJson.edges.forEach(e => {
+            inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
+        });
+        const hotspots = [...inDegree.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        const hotspotsText = hotspots.map(([id, count]) => `- \`${id}\` (${count} inbound links)`).join('\n');
+        
+        const message = {
+            text: `*RepoLens Scan Complete* for ${analysis.repoUrl}\n\n*Metrics:*\n📦 Nodes: ${analysis.nodeCount}\n🔗 Edges: ${analysis.edgeCount}\n\n*Top Structural Bottlenecks:*\n${hotspotsText}`
+        };
+        
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(message)
+        });
+        
+        if (!response.ok) throw new Error('Slack API returned ' + response.status);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Slack integration error:', e);
+        res.status(500).json({ error: 'Failed to notify Slack' });
+    }
+});
+
+app.post('/api/integrations/github-pr', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+        if (!user) return res.status(401).json({ error: 'Not authenticated' });
+        
+        const storedUser = getStoredUserByAuthToken(getBearerToken(req));
+        const token = storedUser?.githubAccessToken;
+        if (!token) return res.status(400).json({ error: 'No GitHub token. Please login with GitHub.' });
+        
+        const { repoUrl, prNumber } = req.body;
+        if (!repoUrl || !prNumber) return res.status(400).json({ error: 'Missing repoUrl or prNumber' });
+        
+        const urlParts = new URL(repoUrl).pathname.split('/').filter(Boolean);
+        const owner = urlParts[0];
+        const repo = urlParts[1];
+        if (!owner || !repo) return res.status(400).json({ error: 'Invalid GitHub URL' });
+        
+        const historyList = await listAnalysisHistory(100, user.id);
+        const analysis = historyList.find(a => a.repoUrl.toLowerCase() === repoUrl.toLowerCase());
+        if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+        
+        const inDegree = new Map<string, number>();
+        analysis.graphJson.edges.forEach(e => {
+            inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
+        });
+        const hotspots = [...inDegree.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        const hotspotsText = hotspots.map(([id, count]) => `- \`${id}\` (${count} inbound links)`).join('\n');
+        
+        const body = `### 🔍 RepoLens Architecture Scan\n\n**Repo:** ${analysis.repoUrl}\n**Nodes:** ${analysis.nodeCount} | **Edges:** ${analysis.edgeCount}\n\n#### 🔴 Top Structural Bottlenecks\n${hotspotsText}\n\n> Sent via RepoLens Integrations`;
+        
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'RepoLens'
+            },
+            body: JSON.stringify({ body })
+        });
+        
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`GitHub API Error ${response.status}: ${errBody}`);
+        }
+        res.json({ success: true });
+    } catch (e) {
+        console.error('GitHub PR integration error:', e);
+        res.status(500).json({ error: 'Failed to notify GitHub PR: ' + (e instanceof Error ? e.message : 'Unknown error') });
+    }
+});
+
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });
 });
-
 app.listen(4000, () => {
     console.log("🚀 RepoLens Highway active on http://localhost:4000");
 });

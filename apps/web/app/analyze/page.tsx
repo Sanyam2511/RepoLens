@@ -387,7 +387,7 @@ export default function AnalyzePage() {
           {loading ? (
             <SkeletonGraph />
           ) : viewMode === "summary" ? (
-            <AnalyzerSummary graphData={graphData} />
+            <AnalyzerSummary graphData={graphData} repoUrl={repoUrl} />
           ) : viewMode === "overview" ? (
             <ArchitectureOverview graphData={graphData} />
           ) : (
