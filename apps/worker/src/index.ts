@@ -664,6 +664,146 @@ app.post('/api/integrations/github-pr', async (req, res) => {
     }
 });
 
+app.post('/api/analyze/review-routing', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+        const { repoUrl, changedFiles } = req.body;
+        if (!repoUrl || !Array.isArray(changedFiles) || changedFiles.length === 0) {
+            return res.status(400).json({ error: 'Missing repoUrl or changedFiles' });
+        }
+        
+        const historyList = await listAnalysisHistory(100, user?.id);
+        const analysis = historyList.find(a => a.repoUrl.toLowerCase() === repoUrl.toLowerCase());
+        if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+        
+        // Reverse adjacency list (target -> list of sources) to find downstream consumers
+        const reverseAdj = new Map<string, string[]>();
+        analysis.graphJson.edges.forEach(e => {
+            if (!reverseAdj.has(e.target)) reverseAdj.set(e.target, []);
+            reverseAdj.get(e.target)!.push(e.source);
+        });
+
+        const impacted = new Set<string>();
+        const queue = [...changedFiles];
+        const visited = new Set<string>();
+
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (visited.has(current)) continue;
+            visited.add(current);
+            
+            const dependents = reverseAdj.get(current) || [];
+            for (const dep of dependents) {
+                impacted.add(dep);
+                if (!visited.has(dep)) {
+                    queue.push(dep);
+                }
+            }
+        }
+        
+        // Identify if any hotspots were impacted
+        const inDegree = new Map<string, number>();
+        analysis.graphJson.edges.forEach(e => {
+            inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
+        });
+        const hotspots = new Set([...inDegree.entries()].filter(([_, c]) => c > 6).map(([id]) => id));
+        
+        const impactedHotspots = Array.from(impacted).filter(id => hotspots.has(id));
+
+        res.json({
+            success: true,
+            impactedCount: impacted.size,
+            impactedFiles: Array.from(impacted).slice(0, 100), // limit to top 100
+            impactedHotspots
+        });
+    } catch (e) {
+        console.error('Review routing error:', e);
+        res.status(500).json({ error: 'Failed to process review routing' });
+    }
+});
+
+app.post('/api/integrations/cicd', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+        const { repoUrl, threshold } = req.body;
+        if (!repoUrl || typeof threshold !== 'number') {
+            return res.status(400).json({ error: 'Missing repoUrl or threshold' });
+        }
+
+        const historyList = await listAnalysisHistory(100, user?.id);
+        const analysis = historyList.find(a => a.repoUrl.toLowerCase() === repoUrl.toLowerCase());
+        if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+
+        const inDegree = new Map<string, number>();
+        analysis.graphJson.edges.forEach(e => {
+            inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
+        });
+
+        const topHotspot = [...inDegree.entries()].sort((a, b) => b[1] - a[1])[0];
+        
+        if (topHotspot && topHotspot[1] > threshold) {
+            return res.status(400).json({ 
+                error: 'Quality gate failed', 
+                message: `Repository has a hotspot (${topHotspot[0]}) with ${topHotspot[1]} inbound links, which exceeds the threshold of ${threshold}.` 
+            });
+        }
+
+        res.json({ success: true, message: 'Quality gate passed' });
+    } catch (e) {
+        console.error('CI/CD integration error:', e);
+        res.status(500).json({ error: 'Failed to process CI/CD integration' });
+    }
+});
+
+app.post('/api/integrations/jira', async (req, res) => {
+    try {
+        const user = getCurrentUser(req);
+        const { repoUrl, jiraWebhookUrl } = req.body;
+        if (!repoUrl || !jiraWebhookUrl) {
+            return res.status(400).json({ error: 'Missing repoUrl or jiraWebhookUrl' });
+        }
+
+        const historyList = await listAnalysisHistory(100, user?.id);
+        const analysis = historyList.find(a => a.repoUrl.toLowerCase() === repoUrl.toLowerCase());
+        if (!analysis) return res.status(404).json({ error: 'Analysis not found' });
+
+        const inDegree = new Map<string, number>();
+        analysis.graphJson.edges.forEach(e => {
+            inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
+        });
+        const hotspots = [...inDegree.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        
+        if (hotspots.length === 0) {
+             return res.json({ success: true, message: 'No hotspots found' });
+        }
+
+        const description = hotspots.map(([id, count]) => `* ${id} (${count} inbound links)`).join('\\n');
+        
+        // Example payload that might be sent to Jira
+        const payload = {
+            fields: {
+                project: { key: "ARCH" },
+                summary: `Refactor top structural bottlenecks in ${analysis.repoUrl}`,
+                description: `RepoLens scan identified the following highly coupled modules:\\n\\n${description}`,
+                issuetype: { name: "Task" }
+            }
+        };
+
+        const response = await fetch(jiraWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('Jira API returned ' + response.status);
+
+        res.json({ success: true, issuesCreated: 1 });
+    } catch (e) {
+        console.error('Jira integration error:', e);
+        res.status(500).json({ error: 'Failed to notify Jira' });
+    }
+});
+
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });
