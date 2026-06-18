@@ -213,6 +213,14 @@ export default function HistoryPage() {
               />
             </label>
             <div className="flex items-center gap-2">
+              {isCompareMode && selectedToCompare.length === 2 && (
+                <Link
+                  href={`/analyze?compareA=${selectedToCompare[0]}&compareB=${selectedToCompare[1]}`}
+                  className="px-3 py-1.5 rounded-md text-sm font-semibold transition bg-indigo-600 text-white hover:bg-indigo-700 mr-2"
+                >
+                  View Diff
+                </Link>
+              )}
               <button
                 onClick={() => {
                   setIsCompareMode(!isCompareMode);
