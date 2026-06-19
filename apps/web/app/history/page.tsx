@@ -416,7 +416,7 @@ export default function HistoryPage() {
         <div style={{ position: "fixed", left: 0, top: 0, width: 1200, height: 1800, background: "white", zIndex: -9999 }} id="pdf-export-container">
           <PdfReportTemplate 
             repoUrl={exportItem.repoUrl}
-            commitSha={exportItem.commitSha}
+            commitSha={exportItem.commitSha ?? undefined}
             date={exportItem.createdAt}
             graphData={exportItem.graphJson as any}
           />
