@@ -273,7 +273,10 @@ app.get('/auth/github', (req, res) => {
         res.status(500).json({ error: 'GitHub OAuth is not configured' });
         return;
     }
-    const redirectUri = 'http://localhost:4000/auth/github/callback';
+    // dynamically get the host URL to support deployed environments
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const hostUrl = protocol + '://' + req.get('host');
+    const redirectUri = `${hostUrl}/auth/github/callback`;
     const githubUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo,read:user,user:email`;
     res.redirect(githubUrl);
 });
@@ -324,7 +327,8 @@ app.get('/auth/github/callback', async (req, res) => {
         const session = loginWithGithub(profile, accessToken);
         
         // Redirect back to frontend with the token
-        const frontendUrl = 'http://localhost:3000/auth/callback';
+        const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : 'http://localhost:3000');
+        const frontendUrl = `${frontendBaseUrl}/auth/callback`;
         const redirectUrl = new URL(frontendUrl);
         redirectUrl.searchParams.set('token', session.token);
         redirectUrl.searchParams.set('user', JSON.stringify(session.user));
@@ -332,7 +336,8 @@ app.get('/auth/github/callback', async (req, res) => {
         res.redirect(redirectUrl.toString());
     } catch (error) {
         console.error('GitHub OAuth error:', error);
-        res.redirect('http://localhost:3000/login?error=github_oauth_failed');
+        const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : 'http://localhost:3000');
+        res.redirect(`${frontendBaseUrl}/login?error=github_oauth_failed`);
     }
 });
 

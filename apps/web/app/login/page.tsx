@@ -102,7 +102,7 @@ export default function LoginPage() {
         </div>
 
         <Link
-          href="http://localhost:4000/auth/github"
+          href={`${process.env.NEXT_PUBLIC_WORKER_API_BASE_URL || 'http://localhost:4000'}/auth/github`}
           className="btn-primary flex items-center justify-center gap-3 w-full h-11 shadow-[0_4px_14px_0_rgba(15,23,42,0.15)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.23)] hover:-translate-y-0.5 transition-all"
         >
           <Github className="h-5 w-5" />
