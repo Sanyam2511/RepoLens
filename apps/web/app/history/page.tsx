@@ -10,10 +10,11 @@ import Footer from "../../components/Footer";
 import { useRouter } from "next/navigation";
 
 // For PDF
+import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import ArchitectureOverview from "../../components/ArchitectureOverview";
 import ArchitectureDetail from "../../components/ArchitectureDetail";
+import PdfReportTemplate from "../../components/PdfReportTemplate";
 import { ReactFlowProvider } from "@xyflow/react";
 
 const getRepoName = (repoUrl: string) => {
@@ -174,14 +175,21 @@ export default function HistoryPage() {
         const element = document.getElementById("pdf-export-container");
         if (!element) return;
         
-        const canvas = await html2canvas(element, { scale: 2 });
-        const imgData = canvas.toDataURL("image/png");
+        const imgData = await toPng(element, { 
+          pixelRatio: 2,
+          width: 1200,
+          height: 1800,
+          style: { overflow: 'hidden' }
+        });
         
         const pdf = new jsPDF("p", "mm", "a4");
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const ratio = Math.min(pdfWidth / 1200, pdfHeight / 1800);
+        const finalWidth = 1200 * ratio;
+        const finalHeight = 1800 * ratio;
         
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+        pdf.addImage(imgData, "PNG", (pdfWidth - finalWidth) / 2, 0, finalWidth, finalHeight);
         pdf.save(`${getRepoName(item.repoUrl)}-analysis.pdf`);
       } catch (err) {
         console.error("PDF generation failed", err);
@@ -405,27 +413,13 @@ export default function HistoryPage() {
 
       {/* Hidden PDF Renderer */}
       {exportItem && (
-        <div style={{ position: "fixed", left: -9999, top: 0, width: 1200, height: 1800, background: "white", zIndex: -9999 }} id="pdf-export-container">
-          <div className="p-8 pb-4 border-b border-[var(--color-border-subtle)]">
-             <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">{getRepoName(exportItem.repoUrl)}</h1>
-             <p className="text-[var(--color-text-secondary)] mt-2">Repository Analysis Report</p>
-          </div>
-          <ReactFlowProvider>
-            <div className="p-8 h-[700px]">
-               <h2 className="text-xl font-semibold mb-4 text-[var(--color-text-primary)]">Architecture Overview</h2>
-               <div className="h-[600px] w-full border border-[var(--color-border-subtle)] rounded-lg overflow-hidden bg-[var(--color-bg-surface)] relative">
-                  <ArchitectureOverview graphData={exportItem.graphJson as any} />
-               </div>
-            </div>
-          </ReactFlowProvider>
-          <ReactFlowProvider>
-            <div className="p-8 h-[700px]">
-               <h2 className="text-xl font-semibold mb-4 text-[var(--color-text-primary)]">Detailed View</h2>
-               <div className="h-[600px] w-full border border-[var(--color-border-subtle)] rounded-lg overflow-hidden bg-[var(--color-bg-surface)] relative">
-                  <ArchitectureDetail graphData={exportItem.graphJson as any} />
-               </div>
-            </div>
-          </ReactFlowProvider>
+        <div style={{ position: "fixed", left: 0, top: 0, width: 1200, height: 1800, background: "white", zIndex: -9999 }} id="pdf-export-container">
+          <PdfReportTemplate 
+            repoUrl={exportItem.repoUrl}
+            commitSha={exportItem.commitSha}
+            date={exportItem.createdAt}
+            graphData={exportItem.graphJson as any}
+          />
         </div>
       )}
       
