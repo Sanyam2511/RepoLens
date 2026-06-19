@@ -327,7 +327,7 @@ app.get('/auth/github/callback', async (req, res) => {
         const session = loginWithGithub(profile, accessToken);
         
         // Redirect back to frontend with the token
-        const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : 'http://localhost:3000');
+        const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0]?.trim() : 'http://localhost:3000');
         const frontendUrl = `${frontendBaseUrl}/auth/callback`;
         const redirectUrl = new URL(frontendUrl);
         redirectUrl.searchParams.set('token', session.token);
@@ -336,7 +336,7 @@ app.get('/auth/github/callback', async (req, res) => {
         res.redirect(redirectUrl.toString());
     } catch (error) {
         console.error('GitHub OAuth error:', error);
-        const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0].trim() : 'http://localhost:3000');
+        const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0]?.trim() : 'http://localhost:3000');
         res.redirect(`${frontendBaseUrl}/login?error=github_oauth_failed`);
     }
 });

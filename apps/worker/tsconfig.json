@@ -43,5 +43,6 @@
     "paths": {
       "shared": ["../../packages/shared/types.ts"]
     }
-  }
+  },
+  "exclude": ["test-fixtures"]
 }
