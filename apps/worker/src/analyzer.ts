@@ -120,8 +120,9 @@ const readFileText = (filePath: string): string | null => {
     } catch { return null; }
 };
 
-const isIgnoredPath = (filePath: string): boolean => {
-    const posix = toPosix(filePath);
+const isIgnoredPath = (filePath: string, repoRoot: string): boolean => {
+    const relPath = path.relative(repoRoot, filePath);
+    const posix = toPosix(relPath);
     return posix.split("/").some((seg) => IGNORED_DIRS.has(seg));
 };
 
@@ -576,7 +577,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
     }
 
     // Fallback glob for repos without tsconfig (plain JS, CommonJS Express, etc.)
-    const usefulFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath()));
+    const usefulFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath(), repoPath));
     if (usefulFiles.length === 0) {
         console.log("[analyzer] no tsconfig found or empty — using glob fallback");
         project.addSourceFilesAtPaths([
@@ -589,7 +590,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
         ]);
     }
 
-    const totalSourceFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath())).length;
+    const totalSourceFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath(), repoPath)).length;
     console.log("[analyzer] ts-morph source files (excl. ignored dirs):", totalSourceFiles);
 
     await reportProgress({ phase: "indexing", percent: 8, detail: "Scanning repository" });
@@ -598,7 +599,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
     const edges: RepoEdge[] = [];
     const edgeKeys = new Set<string>();
 
-    const allFilesFull = walkFiles(repoPath).filter(f => !isIgnoredPath(f));
+    const allFilesFull = walkFiles(repoPath).filter(f => !isIgnoredPath(f, repoPath));
     let allFiles = allFilesFull;
 
     if (allFilesFull.length > LARGE_REPO_FILE_THRESHOLD) {
@@ -666,7 +667,7 @@ export const analyzeRepo = async (repoPath: string, onProgress?: ProgressReporte
     }
 
     // Step 2: Process TS/JS files via ts-morph (accurate import resolution for TypeScript)
-    const sourceFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath()));
+    const sourceFiles = project.getSourceFiles().filter(sf => !isIgnoredPath(sf.getFilePath(), repoPath));
     console.log("[analyzer] processing", sourceFiles.length, "source files via ts-morph");
 
     const tsHandledIds = new Set<string>(); // track which files ts-morph handles
