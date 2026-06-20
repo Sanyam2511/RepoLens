@@ -14,12 +14,13 @@ import {
   Position,
   MarkerType,
   ReactFlowInstance,
+  ControlButton,
 } from "@xyflow/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { RepoGraph } from "shared";
 import { NODE_TYPES, ROLE_COLORS, NodeCategory, type GraphNodeData } from "./GraphNodes";
-import { Copy, AlertTriangle, Search, X, Filter, List } from "lucide-react";
+import { Copy, AlertTriangle, Search, X, Filter, List, Lock, Unlock } from "lucide-react";
 import dagre from "dagre";
 
 const NODE_WIDTH = 220;
@@ -171,6 +172,7 @@ function computeGroupedDagreLayout(
 
 export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph | null }) {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node<GraphNodeData>, Edge> | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
@@ -803,6 +805,11 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         minZoom={0.05}
         maxZoom={2}
         className="bg-transparent"
+        panOnDrag={!isLocked}
+        panOnScroll={!isLocked}
+        zoomOnPinch={!isLocked}
+        zoomOnScroll={!isLocked}
+        zoomOnDoubleClick={!isLocked}
         nodesConnectable={false}
         nodesDraggable={false}
         elementsSelectable={false}
@@ -810,7 +817,11 @@ export default function ArchitectureDetail({ graphData }: { graphData: RepoGraph
         edgesFocusable={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#E2E8F0" />
-        <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]" />
+        <Controls showInteractive={false} className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]">
+          <ControlButton onClick={() => setIsLocked(!isLocked)} title={isLocked ? "Unlock View" : "Lock View"}>
+            {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+          </ControlButton>
+        </Controls>
       </ReactFlow>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { MessageSquare, X, Send, Loader2, Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { getStoredAuthSession } from "../lib/auth";
+import { getStoredAuthSession, workerFetch } from "../lib/auth";
 
 type ChatMessage = {
   role: "user" | "model";
@@ -76,17 +76,8 @@ export default function ArchitectureChat({ repoUrl }: { repoUrl: string }) {
     setIsLoading(true);
 
     try {
-      const session = getStoredAuthSession();
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (session) {
-        headers["Authorization"] = `Bearer ${session.token}`;
-      }
-
-      const res = await fetch("http://localhost:4000/api/chat", {
+      const res = await workerFetch("/api/chat", {
         method: "POST",
-        headers,
         body: JSON.stringify({
           repoUrl,
           messages: newMessages,

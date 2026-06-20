@@ -25,8 +25,9 @@ export default function AuthShell({
       <div className="relative z-10 w-full max-w-[420px]">
         <div className="surface-card shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] p-8 sm:p-10 rounded-[2rem] border border-white/60 backdrop-blur-xl bg-white/80">
           <div className="flex justify-center mb-6">
-            <Link href="/" className="hover:-translate-y-0.5 transition-transform cursor-pointer shadow-[0_8px_30px_rgba(15,23,42,0.15)] rounded-[10px] bg-white ring-4 ring-white">
-              <BrandMark className="w-16 h-16" />
+            <Link href="/" className="flex items-center justify-center gap-3 text-[var(--color-text-primary)] hover:-translate-y-0.5 transition-transform cursor-pointer">
+              <BrandMark className="h-10 w-10" />
+              <span className="text-2xl font-bold tracking-tight">RepoLens</span>
             </Link>
           </div>
           
