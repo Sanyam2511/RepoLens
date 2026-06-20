@@ -13,12 +13,11 @@ import {
   ReactFlowInstance,
   useNodesState,
   useEdgesState,
-  ControlButton,
 } from "@xyflow/react";
 import dagre from "dagre";
 import { RepoGraph } from "shared";
 import { NODE_TYPES, type GraphNodeData } from "./GraphNodes";
-import { Copy, X, Maximize2, Search, Filter, Lock, Unlock } from "lucide-react";
+import { Copy, X, Maximize2, Search, Filter } from "lucide-react";
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 76;
@@ -300,7 +299,6 @@ const buildArchitectureTree = (graphData: RepoGraph | null, showNpm: boolean) =>
 
 export default function ArchitectureOverview({ graphData }: { graphData: RepoGraph | null }) {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node<GraphNodeData>, Edge> | null>(null);
-  const [isLocked, setIsLocked] = useState(false);
   
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<GraphNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -497,22 +495,17 @@ export default function ArchitectureOverview({ graphData }: { graphData: RepoGra
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={true}
-        panOnDrag={!isLocked}
-        panOnScroll={!isLocked}
-        zoomOnPinch={!isLocked}
-        zoomOnScroll={!isLocked}
-        zoomOnDoubleClick={!isLocked}
+        panOnDrag={true}
+        panOnScroll={true}
+        zoomOnPinch={true}
+        zoomOnScroll={true}
         onInit={setRfInstance}
         minZoom={0.01}
         maxZoom={2}
         className="h-full w-full bg-transparent"
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#E2E8F0" />
-        <Controls showInteractive={false} className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]">
-          <ControlButton onClick={() => setIsLocked(!isLocked)} title={isLocked ? "Unlock View" : "Lock View"}>
-            {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-          </ControlButton>
-        </Controls>
+        <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-strong)] text-[var(--color-text-secondary)]" />
       </ReactFlow>
     </div>
   );
