@@ -207,9 +207,9 @@ const getBearerToken = (req: express.Request) => {
     return match?.[1] ?? null;
 };
 
-const getCurrentUser = (req: express.Request) => getUserFromToken(getBearerToken(req));
+const getCurrentUser = async (req: express.Request) => await getUserFromToken(getBearerToken(req));
 
-app.post('/auth/signup', (req, res) => {
+app.post('/auth/signup', async (req, res) => {
     const { name, email, password } = req.body ?? {};
 
     if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
@@ -228,14 +228,14 @@ app.post('/auth/signup', (req, res) => {
     }
 
     try {
-        const session = createUser(name, email, password);
+        const session = await createUser(name, email, password);
         res.status(201).json(session);
     } catch (error) {
         res.status(400).json({ error: error instanceof Error ? error.message : 'Unable to create account' });
     }
 });
 
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', async (req, res) => {
     const { email, password } = req.body ?? {};
 
     if (typeof email !== 'string' || typeof password !== 'string') {
@@ -244,15 +244,15 @@ app.post('/auth/login', (req, res) => {
     }
 
     try {
-        const session = loginUser(email, password);
+        const session = await loginUser(email, password);
         res.json(session);
     } catch (error) {
         res.status(401).json({ error: error instanceof Error ? error.message : 'Invalid credentials' });
     }
 });
 
-app.get('/auth/me', (req, res) => {
-    const user = getCurrentUser(req);
+app.get('/auth/me', async (req, res) => {
+    const user = await getCurrentUser(req);
 
     if (!user) {
         res.status(401).json({ error: 'Not authenticated' });
@@ -262,8 +262,8 @@ app.get('/auth/me', (req, res) => {
     res.json({ user });
 });
 
-app.post('/auth/logout', (req, res) => {
-    revokeToken(getBearerToken(req));
+app.post('/auth/logout', async (req, res) => {
+    await revokeToken(getBearerToken(req));
     res.json({ success: true });
 });
 
@@ -324,7 +324,7 @@ app.get('/auth/github/callback', async (req, res) => {
         const primaryEmail = emails.find((e: any) => e.primary)?.email || emails[0]?.email;
         if (primaryEmail) profile.email = primaryEmail;
 
-        const session = loginWithGithub(profile, accessToken);
+        const session = await loginWithGithub(profile, accessToken);
         
         // Redirect back to frontend with the token
         const frontendBaseUrl = process.env.FRONTEND_URL || (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',')[0]?.trim() : 'http://localhost:3000');
@@ -342,7 +342,7 @@ app.get('/auth/github/callback', async (req, res) => {
 });
 
 app.get('/github/repos', async (req, res) => {
-    const rawUser = getStoredUserByAuthToken(getBearerToken(req));
+    const rawUser = await getStoredUserByAuthToken(getBearerToken(req));
     if (!rawUser) {
         res.status(401).json({ error: 'Not authenticated' });
         return;
@@ -386,7 +386,7 @@ app.post('/analyze', async (req, res) => {
         return;
     }
 
-    const currentUser = getCurrentUser(req);
+    const currentUser = await getCurrentUser(req);
 
     try {
         try {
@@ -452,7 +452,7 @@ app.get('/status/:jobId', async (req, res) => {
 
 app.get('/history', async (_req, res) => {
     try {
-        const user = getCurrentUser(_req);
+        const user = await getCurrentUser(_req);
 
         if (!user) {
             res.status(401).json({ error: 'Not authenticated' });
@@ -469,7 +469,7 @@ app.get('/history', async (_req, res) => {
 
 app.get('/history/:id', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
 
         if (!user) {
             res.status(401).json({ error: 'Not authenticated' });
@@ -492,7 +492,7 @@ app.get('/history/:id', async (req, res) => {
 
 app.delete('/history/:id', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
 
         if (!user) {
             res.status(401).json({ error: 'Not authenticated' });
@@ -517,7 +517,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
         
         const { repoUrl, messages } = req.body;
         if (!repoUrl || !Array.isArray(messages)) {
@@ -586,7 +586,7 @@ Be concise.`;
 
 app.post('/api/integrations/slack', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
         const { repoUrl, webhookUrl } = req.body;
         if (!repoUrl || !webhookUrl) return res.status(400).json({ error: 'Missing repoUrl or webhookUrl' });
         
@@ -621,10 +621,10 @@ app.post('/api/integrations/slack', async (req, res) => {
 
 app.post('/api/integrations/github-pr', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
         if (!user) return res.status(401).json({ error: 'Not authenticated' });
         
-        const storedUser = getStoredUserByAuthToken(getBearerToken(req));
+        const storedUser = await getStoredUserByAuthToken(getBearerToken(req));
         const token = storedUser?.githubAccessToken;
         if (!token) return res.status(400).json({ error: 'No GitHub token. Please login with GitHub.' });
         
@@ -672,7 +672,7 @@ app.post('/api/integrations/github-pr', async (req, res) => {
 
 app.post('/api/analyze/review-routing', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
         const { repoUrl, changedFiles } = req.body;
         if (!repoUrl || !Array.isArray(changedFiles) || changedFiles.length === 0) {
             return res.status(400).json({ error: 'Missing repoUrl or changedFiles' });
@@ -730,7 +730,7 @@ app.post('/api/analyze/review-routing', async (req, res) => {
 
 app.post('/api/integrations/cicd', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
         const { repoUrl, threshold } = req.body;
         if (!repoUrl || typeof threshold !== 'number') {
             return res.status(400).json({ error: 'Missing repoUrl or threshold' });
@@ -763,7 +763,7 @@ app.post('/api/integrations/cicd', async (req, res) => {
 
 app.post('/api/integrations/jira', async (req, res) => {
     try {
-        const user = getCurrentUser(req);
+        const user = await getCurrentUser(req);
         const { repoUrl, jiraWebhookUrl } = req.body;
         if (!repoUrl || !jiraWebhookUrl) {
             return res.status(400).json({ error: 'Missing repoUrl or jiraWebhookUrl' });
