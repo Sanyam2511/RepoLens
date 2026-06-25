@@ -4,7 +4,8 @@
 
 RepoLens is an interactive visualization and analysis tool designed to help developers, architects, and teams understand the structure and dependencies of GitHub repositories. By parsing codebases and generating interactive dependency graphs, RepoLens makes it easy to grasp complex architectures at a glance.
 
-![RepoLens Preview](https://repolens-aoba.onrender.com/favicon.ico) *(Replace with actual screenshot link)*
+![RepoLens Preview](<img width="1482" height="1304" alt="image" src="https://github.com/user-attachments/assets/ca85fbc4-2465-4ad7-b1f7-80bc1ca936ad" />)
+ 
 
 ## Features
 
